@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include "Analysis/ROI.hpp"
+#include "ROI/ROI.hpp"
 
 class EllipseROI : public ROI {
  public:

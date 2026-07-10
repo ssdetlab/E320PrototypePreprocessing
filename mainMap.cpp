@@ -6,24 +6,19 @@ int main() {
   Preprocessor::Options opt;
 
   // Data directory path
-  opt.pathToDataDir =
+  opt.inDataDir =
       "/home/romanurmanov/work/E320/E320Prototype/"
-      "E320Prototype_dataInRootFormat/E320Shift_June_2026_positrons/raw/"
-      "positron_runs/june_23";
+      "E320Prototype_dataInRootFormat/local_alignment_data/raw/sig";
   // ROI data directory path
-  opt.pathToROIDir =
-      "/home/romanurmanov/work/E320/E320Prototype/"
-      "E320Prototype_dataInRootFormat/E320Shift_June_2026_positrons/shift_copy/"
-      "misc/june_23/data_Run1207/ev_data";
+  opt.inROIDir =
+      "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_preprocessing/"
+      "out_data/rois/local_alignment_data";
   // Data tree name
-  opt.dataTreeName = "MyTree";
-  // ROI data tree name
-  opt.roiDataTreeName = "MyTree";
+  opt.inDataTreeName = "MyTree";
   // Output directory path
-  opt.outPathDir =
+  opt.outDir =
       "/home/romanurmanov/work/E320/E320Prototype/"
-      "E320Prototype_dataInRootFormat/E320Shift_June_2026_positrons/processed/"
-      "positron_runs/june_23";
+      "E320Prototype_dataInRootFormat/local_alignment_data/processed";
   // Output data tree name
   opt.outDataTreeName = "data";
   // Output magnet tree name
@@ -34,17 +29,23 @@ int main() {
   opt.dipoleLength = 0.9144;       // in meters
   opt.xCorrectorLength = 0.23368;  // in meters
   opt.deflectionAngle = 0.006;     // in rad
+  /// Accelerator data noise low quantile
+  opt.noiseQuantileLowAcc = 0.1;
+  /// Accelerator data noise high quantile
+  opt.noiseQuantileHighAcc = 0.9;
   // Max number of StdDevs for the
   // accelerator data
   opt.nStdDevsAcc = 6;
   // ROI type
   opt.roiType = Preprocessor::ROIType::Butterfly;
   // Maximum number of hits
-  opt.maxHits = 35;
+  opt.maxHits = 1e6;
   // Maximum number of hits in the ROI
   opt.maxRoiHits = 1e6;
   // Maximum cluster size
   opt.maxClusterSize = 4;
+  // Exclude shuttered events flag
+  opt.excludeShuttered = false;
 
   preprocessor.processFiles(opt);
 };

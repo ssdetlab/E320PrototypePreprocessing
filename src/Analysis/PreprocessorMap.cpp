@@ -1,25 +1,29 @@
 #include "Analysis/PreprocessorMap.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <deque>
 #include <filesystem>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <stdexcept>
+#include <string>
 
-#include "Analysis/ButterflyROI.hpp"
-#include "Analysis/EllipseROI.hpp"
 #include "Analysis/PVList.hpp"
-#include "Analysis/UnboundedROI.hpp"
+#include "ROI/ButterflyROI.hpp"
+#include "ROI/EllipseROI.hpp"
+#include "ROI/UnboundedROI.hpp"
+#include "TCanvas.h"
+#include "detail/Painters.hpp"
 
 std::map<std::string, Preprocessor::PathCollection>
-Preprocessor::collectDataPaths(const Options &opt) {
-  std::cout << "Collecting data paths from\n" << opt.pathToDataDir << "\n";
+Preprocessor::collectDataPaths(const Options &opt) const {
+  std::cout << "Collecting data paths from\n" << opt.inDataDir << "\n";
 
   // Collect directories with run data
   std::vector<std::filesystem::path> inDirs;
-  for (const auto &entry :
-       std::filesystem::directory_iterator(opt.pathToDataDir)) {
+  for (const auto &entry : std::filesystem::directory_iterator(opt.inDataDir)) {
     if (!entry.is_directory()) {
       continue;
     }
@@ -38,8 +42,9 @@ Preprocessor::collectDataPaths(const Options &opt) {
     std::advance(beginIt, nPathSteps - 1);
     std::string runString = beginIt->string();
 
+    paths[runString].parentPath = inPath.string();
     paths[runString].runPrefix = runString;
-    paths[runString].outPath = opt.outPathDir + "/" + runString + ".root";
+    paths[runString].outPath = opt.outDir + "/" + runString + ".root";
     for (const auto &entry :
          std::filesystem::recursive_directory_iterator(inPath)) {
       if (!entry.is_regular_file() || entry.path().extension() != ".root") {
@@ -72,99 +77,8 @@ Preprocessor::collectDataPaths(const Options &opt) {
   return paths;
 };
 
-std::unordered_map<int, std::shared_ptr<ROI>> Preprocessor::computeROIs(
-    const Options &opt, Stats &stats) {
-  std::cout << "Collecting ROI paths from: " << opt.pathToROIDir << "\n";
-  // Get ROI data paths
-  std::vector<std::string> paths;
-  for (const auto &entry :
-       std::filesystem::recursive_directory_iterator(opt.pathToROIDir)) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".root") {
-      continue;
-    }
-    paths.push_back(entry.path().string());
-  }
-
-  // Get ROI data tree
-  std::cout << "Getting ROI file handle\n";
-  auto [file, chain, tree] = getFileHandle(opt.roiDataTreeName, paths);
-
-  // Fill hists for ROI estimation
-  std::cout << "Building ROI histograms\n";
-  detector_event *detEvent = nullptr;
-  tree->SetBranchAddress("event", &detEvent);
-  for (std::size_t i = 0; i < tree->GetEntries(); i++) {
-    tree->GetEntry(i);
-
-    for (const auto &staveEv : detEvent->st_ev_buffer) {
-      for (const auto &chipEv : staveEv.ch_ev_buffer) {
-        int id =
-            100 * detEvent->run_number + 10 * staveEv.stave_id + chipEv.chip_id;
-        for (const auto &[hitX, hitY] : chipEv.hits) {
-          stats.chipHitMapROIRawHists.at(chipEv.chip_id).Fill(hitX, hitY);
-        }
-      }
-    }
-  }
-
-  // Compute ROIs
-  Eigen::JacobiSVD<Eigen::MatrixXd> svd;
-  std::unordered_map<int, std::shared_ptr<ROI>> rois;
-  for (int id : opt.chipIds) {
-    std::cout << "Computing ROI for " << id << "\n";
-    const auto &hist = stats.chipHitMapROIRawHists.at(id);
-
-    int maxBinX = 0, maxBinY = 0, maxBinZ = 0;
-    int maxBin = hist.GetMaximumBin();
-    hist.GetBinXYZ(maxBin, maxBinX, maxBinY, maxBinZ);
-
-    double varX = hist.GetStdDev(1) * hist.GetStdDev(1);
-    double varY = hist.GetStdDev(2) * hist.GetStdDev(2);
-    double covXY = hist.GetCovariance();
-
-    Eigen::MatrixXd cov(2, 2);
-    cov << varX, covXY, covXY, varY;
-
-    svd.compute(cov, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::VectorXd evals = svd.singularValues().cwiseSqrt();
-    Eigen::MatrixXd rotMat = svd.matrixU();
-    double theta = std::asin(rotMat(1, 0));
-
-    std::cout << "Building ROI " << opt.roiType << "\n";
-    std::cout << "Center X: " << hist.GetXaxis()->GetBinCenter(maxBinX) << "\n";
-    std::cout << "Center Y: " << hist.GetYaxis()->GetBinCenter(maxBinY) << "\n";
-    std::cout << "Width X: " << 0.4 * evals(0) << "\n";
-    std::cout << "Width Y: " << 0.15 * evals(1) << "\n";
-    std::cout << "Theta: " << theta << "\n";
-
-    switch (opt.roiType) {
-      case Ellipse:
-        rois.insert({id, std::make_shared<EllipseROI>(
-                             hist.GetXaxis()->GetBinCenter(maxBinX),
-                             hist.GetYaxis()->GetBinCenter(maxBinY),
-                             0.4 * evals(0), 0.15 * evals(1), theta)});
-        break;
-      case Butterfly:
-        rois.insert({id, std::make_shared<ButterflyROI>(
-                             hist.GetXaxis()->GetBinCenter(maxBinX),
-                             hist.GetYaxis()->GetBinCenter(maxBinY),
-                             0.4 * evals(0), 0.15 * evals(1), theta, 300)});
-        break;
-      case Unbounded:
-        rois.insert({id, std::make_shared<UnboundedROI>()});
-        break;
-      default:
-        throw std::runtime_error("Unknown ROI type");
-        break;
-    }
-  }
-
-  std::cout << "\n\n\n\n";
-  return rois;
-}
-
 Preprocessor::FileHandle Preprocessor::getFileHandle(
-    const std::string &treeName, const std::vector<std::string> &paths) {
+    const std::string &treeName, const std::vector<std::string> &paths) const {
   TFile *file = nullptr;
   TTree *tree = nullptr;
   TChain *chainOwner = new TChain(treeName.c_str(), treeName.c_str());
@@ -182,26 +96,56 @@ Preprocessor::FileHandle Preprocessor::getFileHandle(
   return {file, chainOwner, tree};
 }
 
-void Preprocessor::processFiles(const Options &opt) {
-  Stats globalStats(opt.chipIds);
-  globalStats.init("Total");
+std::map<std::size_t, std::shared_ptr<ROI>> Preprocessor::getROIs(
+    const std::string &pathToROIData, const Options &opt) const {
+  std::map<std::size_t, std::shared_ptr<ROI>> rois;
+  switch (opt.roiType) {
+    case Ellipse: {
+      throw std::runtime_error("Ellipse ROI reading is not supported yet");
+      break;
+    }
+    case Butterfly: {
+      ButterflyROIFactory factory;
+      auto butterflies = factory.buildROIForRun(pathToROIData);
+      for (std::size_t id : opt.chipIds) {
+        rois.insert({id, butterflies.at(id)});
+      }
+      break;
+    }
+    case Unbounded: {
+      for (std::size_t id : opt.chipIds) {
+        rois.insert({id, std::make_shared<UnboundedROI>()});
+      }
+      break;
+    }
+    default: {
+      throw std::runtime_error("Unknown ROI type");
+      break;
+    }
+  }
+  return rois;
+}
 
-  Stats localStats(opt.chipIds);
+void Preprocessor::processFiles(const Options &opt) const {
+  Stats globalStats;
+  globalStats.init("Total", opt.chipIds);
 
   auto paths = collectDataPaths(opt);
-
-  auto rois = computeROIs(opt, localStats);
 
   ULong64_t eventId = 0;
   for (const auto &[runPrefix, collection] : paths) {
     std::cout << "Processing " << runPrefix << "\n";
 
+    std::string roiPath = opt.inROIDir + "/" + runPrefix + ".csv";
+    auto rois = getROIs(roiPath, opt);
+
     // Initialize stats
-    localStats.init(runPrefix);
+    Stats localStats;
+    localStats.init(runPrefix, opt.chipIds);
 
     // Get data tree
     auto [inFile, inChain, inTree] =
-        getFileHandle(opt.roiDataTreeName, collection.inPaths);
+        getFileHandle(opt.inDataTreeName, collection.inPaths);
 
     // Output files
     if (auto parentPath =
@@ -217,7 +161,7 @@ void Preprocessor::processFiles(const Options &opt) {
 
     // Collect bad events
     std::unordered_set<std::size_t> badEvents =
-        getBadEvents(inTree, collection.skip, opt.nStdDevsAcc);
+        getBadEvents(inTree, collection.skip, opt);
 
     // Initialize tree readout
     detector_event *detEvent = nullptr;
@@ -348,7 +292,7 @@ void Preprocessor::processFiles(const Options &opt) {
       std::size_t pid =
           static_cast<std::size_t>(std::round((epicsPID - 10) / 36));
       bool isShuttered = pid % 20 == 0;
-      if (isShuttered) {
+      if (isShuttered && opt.excludeShuttered) {
         continue;
       }
       localStats.nEventsUnshuttered++;
@@ -476,6 +420,15 @@ void Preprocessor::processFiles(const Options &opt) {
           }
           outChipEvent.hits.shrink_to_fit();
 
+          // Continue if the ROI is overpopulated
+          if (outChipEvent.hits.size() > opt.maxRoiHits) {
+            continue;
+          }
+          // Continue if the hits are empty
+          if (outChipEvent.hits.empty()) {
+            continue;
+          }
+
           // Fill ROId hit map
           localStats.chipOccFilteredGrs.at(outChipEvent.chip_id)
               .SetPoint(
@@ -486,14 +439,6 @@ void Preprocessor::processFiles(const Options &opt) {
                 .Fill(hit.xCenter, hit.yCenter);
           }
 
-          // Continue if the ROI is overpopulated
-          if (outChipEvent.hits.size() > opt.maxRoiHits) {
-            continue;
-          }
-          // Continue if the hits are empty
-          if (outChipEvent.hits.empty()) {
-            continue;
-          }
           outChipEvents.push_back(std::move(outChipEvent));
         }
 
@@ -543,7 +488,8 @@ void Preprocessor::processFiles(const Options &opt) {
 }
 
 std::pair<AcceleratorState, AcceleratorState>
-Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip) {
+Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
+                                         const Options &opt) const {
   detector_event *detEvent = nullptr;
   tree->SetBranchAddress("event", &detEvent);
 
@@ -631,7 +577,7 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip) {
 
   AcceleratorState accStateMin;
   AcceleratorState accStateMax;
-  double quantilePos[2] = {0.01, 0.99};
+  double quantilePos[2] = {opt.noiseQuantileLowAcc, opt.noiseQuantileHighAcc};
 
   double pmt_s20_3060_qs[2];
   pmt_s20_3060_hist.GetQuantiles(2, pmt_s20_3060_qs, quantilePos);
@@ -846,22 +792,23 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip) {
   return {accStateMean, accStateStdDev};
 }
 
-std::unordered_set<std::size_t> Preprocessor::getBadEvents(TTree *tree,
-                                                           std::size_t skip,
-                                                           int nStdDevs) {
-  std::cout << "Getting bad events with AccStdDev = " << nStdDevs << "\n";
+std::unordered_set<std::size_t> Preprocessor::getBadEvents(
+    TTree *tree, std::size_t skip, const Options &opt) const {
+  std::cout << "Getting bad events with AccStdDev = " << opt.nStdDevsAcc
+            << "\n";
   // Get accelerator state parameters
-  auto [accStateMean, accStateStdDev] = getAcceleratorStateMeanStd(tree, skip);
+  auto [accStateMean, accStateStdDev] =
+      getAcceleratorStateMeanStd(tree, skip, opt);
 
   detector_event *detEvent = nullptr;
   tree->SetBranchAddress("event", &detEvent);
 
   std::unordered_set<std::size_t> badEvents;
-  auto isBadCentral = [&nStdDevs](double mean, double std, double val) {
-    return (std::abs(mean - val) / std > nStdDevs);
+  auto isBadCentral = [&opt](double mean, double std, double val) {
+    return (std::abs(mean - val) / std > opt.nStdDevsAcc);
   };
-  auto isBadUpper = [&nStdDevs](double mean, double std, double val) {
-    return ((val - mean) / std > nStdDevs);
+  auto isBadUpper = [&opt](double mean, double std, double val) {
+    return ((val - mean) / std > opt.nStdDevsAcc);
   };
 
   for (std::size_t i = skip; i < tree->GetEntries(); i++) {
@@ -917,7 +864,7 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(TTree *tree,
       badEvents.insert(i);
       continue;
     }
-    if (pmt_s20_3070_val > 580) {
+    if (pmt_s20_3070_val > 1000) {
       badEvents.insert(i);
       continue;
     }
@@ -939,41 +886,41 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(TTree *tree,
       badEvents.insert(i);
       continue;
     }
-    // // TORO:LI20:1988:TMIT_PC
-    // if (isBadCentral(accStateMean.toro_li20_1988_tmit_pc,
-    //                  accStateStdDev.toro_li20_1988_tmit_pc,
-    //                  toro_li20_1988_tmit_pc_val)) {
-    //   badEvents.insert(i);
-    //   continue;
-    // }
-    // // TORO:LI20:2040:TMIT_PC
-    // if (isBadCentral(accStateMean.toro_li20_2040_tmit_pc,
-    //                  accStateStdDev.toro_li20_2040_tmit_pc,
-    //                  toro_li20_2040_tmit_pc_val)) {
-    //   badEvents.insert(i);
-    //   continue;
-    // }
-    // // TORO:LI20:2452:TMIT_PC
-    // if (isBadCentral(accStateMean.toro_li20_2452_tmit_pc,
-    //                  accStateStdDev.toro_li20_2452_tmit_pc,
-    //                  toro_li20_2452_tmit_pc_val)) {
-    //   badEvents.insert(i);
-    //   continue;
-    // }
-    // // TORO:LI20:3163:TMIT_PC
-    // if (isBadCentral(accStateMean.toro_li20_3163_tmit_pc,
-    //                  accStateStdDev.toro_li20_3163_tmit_pc,
-    //                  toro_li20_3163_tmit_pc_val)) {
-    //   badEvents.insert(i);
-    //   continue;
-    // }
-    // // TORO:LI20:3255:TMIT_PC
-    // if (isBadCentral(accStateMean.toro_li20_3255_tmit_pc,
-    //                  accStateStdDev.toro_li20_3255_tmit_pc,
-    //                  toro_li20_3255_tmit_pc_val)) {
-    //   badEvents.insert(i);
-    //   continue;
-    // }
+    // TORO:LI20:1988:TMIT_PC
+    if (isBadCentral(accStateMean.toro_li20_1988_tmit_pc,
+                     accStateStdDev.toro_li20_1988_tmit_pc,
+                     toro_li20_1988_tmit_pc_val)) {
+      badEvents.insert(i);
+      continue;
+    }
+    // TORO:LI20:2040:TMIT_PC
+    if (isBadCentral(accStateMean.toro_li20_2040_tmit_pc,
+                     accStateStdDev.toro_li20_2040_tmit_pc,
+                     toro_li20_2040_tmit_pc_val)) {
+      badEvents.insert(i);
+      continue;
+    }
+    // TORO:LI20:2452:TMIT_PC
+    if (isBadCentral(accStateMean.toro_li20_2452_tmit_pc,
+                     accStateStdDev.toro_li20_2452_tmit_pc,
+                     toro_li20_2452_tmit_pc_val)) {
+      badEvents.insert(i);
+      continue;
+    }
+    // TORO:LI20:3163:TMIT_PC
+    if (isBadCentral(accStateMean.toro_li20_3163_tmit_pc,
+                     accStateStdDev.toro_li20_3163_tmit_pc,
+                     toro_li20_3163_tmit_pc_val)) {
+      badEvents.insert(i);
+      continue;
+    }
+    // TORO:LI20:3255:TMIT_PC
+    if (isBadCentral(accStateMean.toro_li20_3255_tmit_pc,
+                     accStateStdDev.toro_li20_3255_tmit_pc,
+                     toro_li20_3255_tmit_pc_val)) {
+      badEvents.insert(i);
+      continue;
+    }
   }
   std::cout << "Found bad events " << badEvents.size() << "\n";
   std::cout << "\n\n\n\n";
@@ -981,7 +928,7 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(TTree *tree,
 }
 
 void Preprocessor::bfsClustering(std::vector<Hit> &clusterPixels, Hit &pivot,
-                                 HitSet &pixels) {
+                                 HitSet &pixels) const {
   std::deque<Hit> queue{pivot};
   while (!queue.empty()) {
     auto current = queue.front();
@@ -1009,7 +956,7 @@ void Preprocessor::bfsClustering(std::vector<Hit> &clusterPixels, Hit &pivot,
 }
 
 std::vector<Preprocessor::Cluster> Preprocessor::getClusters(
-    HitSet &hits, std::size_t maxCluterSize) {
+    HitSet &hits, std::size_t maxCluterSize) const {
   std::vector<Cluster> clusters;
 
   while (!hits.empty()) {
@@ -1055,27 +1002,337 @@ std::vector<Preprocessor::Cluster> Preprocessor::getClusters(
   return clusters;
 }
 
-double Preprocessor::convertEpicsDipole(double val, double theta, double bz) {
+double Preprocessor::convertEpicsDipole(double val, double theta,
+                                        double bz) const {
   const double c_light = 2.99792458E8;  // speed of light in m/s
   const double me = 0.5109989461e6;     // electron mass in eV
 
   return std::sqrt(val * val - me * me) * std::sin(theta) / (c_light * bz);
 }
 
-double Preprocessor::convertEpicsXCorrector(double val, double bz) {
+double Preprocessor::convertEpicsXCorrector(double val, double bz) const {
   return val / bz * 0.1;
 }
 
-double Preprocessor::convertEpicsQuad(double val) {
+double Preprocessor::convertEpicsQuad(double val) const {
   return val * 0.1;
 }
 
 double Preprocessor::getPv(const detector_event *detEvent,
-                           const std::string &pvname) {
+                           const std::string &pvname) const {
   try {
     return std::stod(detEvent->ev_epics_frame.pv_map.at(pvname).value);
   } catch (std::out_of_range &err) {
     std::cout << "MISSING PV " << pvname << "\n";
     throw err;
   }
+}
+
+void Preprocessor::Stats::init(const std::string &prefix,
+                               const std::set<std::size_t> &ids) {
+  runPrefix = prefix;
+  chipIds = ids;
+
+  std::string nameEventSplit = runPrefix + "EventSplit";
+  eventCategotyHist =
+      TH1I(nameEventSplit.c_str(), nameEventSplit.c_str(), 6, 0, 6);
+  eventCategotyHist.Fill("nEventsTotal", 0);
+  eventCategotyHist.Fill("nEventsAccepted", 0);
+  eventCategotyHist.Fill("nEventsUnshuttered", 0);
+  eventCategotyHist.Fill("nEventsEvenPID", 0);
+  eventCategotyHist.Fill("nEventsOddPID", 0);
+  eventCategotyHist.Fill("nEventsFullDetEvenPID", 0);
+  eventCategotyHist.Fill("nEventsFullDetOddPID", 0);
+
+  for (int id : chipIds) {
+    // Raw hit map hists
+    std::string nameChipHitMapRaw =
+        runPrefix + "Chip" + std::to_string(id) + "HitMapRaw";
+    chipHitMapRawHists.insert(
+        {id, TH2D(nameChipHitMapRaw.c_str(), nameChipHitMapRaw.c_str(), 256, 0,
+                  1024, 128, 0, 512)});
+    // Filtered hit map hists
+    std::string nameChipHitMapFiltered =
+        runPrefix + "Chip" + std::to_string(id) + "HitMapFiltered";
+    chipHitMapFilteredHists.insert(
+        {id, TH2D(nameChipHitMapFiltered.c_str(),
+                  nameChipHitMapFiltered.c_str(), 256, 0, 1024, 128, 0, 512)});
+    // Raw occupancy graphs
+    std::string nameChipOccR =
+        runPrefix + "Chip" + std::to_string(id) + "OccRaw";
+    chipOccRawGrs.insert({id, TGraph()});
+    // Filtered occupancy graphs
+    std::string nameChipOccFilter =
+        runPrefix + "Chip" + std::to_string(id) + "OccFiltered";
+    chipOccFilteredGrs.insert({id, TGraph()});
+  }
+
+  // Raw PMTs
+  gr_PMT_S20_3060_Raw = TGraph();
+  gr_PMT_S20_3070_Raw = TGraph();
+  gr_PMT_S20_3179_Raw = TGraph();
+  gr_PMT_S20_3350_Raw = TGraph();
+  gr_PMT_S20_3360_Raw = TGraph();
+  // Filtered PMTs
+  gr_PMT_S20_3060_Filtered = TGraph();
+  gr_PMT_S20_3070_Filtered = TGraph();
+  gr_PMT_S20_3179_Filtered = TGraph();
+  gr_PMT_S20_3350_Filtered = TGraph();
+  gr_PMT_S20_3360_Filtered = TGraph();
+  // Raw toroids
+  gr_TORO_LI20_1988_TMIT_PC_Raw = TGraph();
+  gr_TORO_LI20_2040_TMIT_PC_Raw = TGraph();
+  gr_TORO_LI20_2452_TMIT_PC_Raw = TGraph();
+  gr_TORO_LI20_3163_TMIT_PC_Raw = TGraph();
+  gr_TORO_LI20_3255_TMIT_PC_Raw = TGraph();
+  // Filtered toroids
+  gr_TORO_LI20_1988_TMIT_PC_Filtered = TGraph();
+  gr_TORO_LI20_2040_TMIT_PC_Filtered = TGraph();
+  gr_TORO_LI20_2452_TMIT_PC_Filtered = TGraph();
+  gr_TORO_LI20_3163_TMIT_PC_Filtered = TGraph();
+  gr_TORO_LI20_3255_TMIT_PC_Filtered = TGraph();
+}
+
+void Preprocessor::Stats::reset() {
+  // N total events
+  nEventsTotal = 0;
+  // N accepted events
+  nEventsAccepted = 0;
+  // N shuttered events
+  nEventsUnshuttered = 0;
+  // N even PID events
+  nEventsEvenPID = 0;
+  // N odd PID events
+  nEventsOddPID = 0;
+  // N events with full detector occupancy
+  // and even PID
+  nEventsFullDetEvenPID = 0;
+  // N events with full detector occupancy
+  // and odd PID
+  nEventsFullDetOddPID = 0;
+
+  // Raw hit map hists
+  chipHitMapRawHists.clear();
+  // Filtered hit map hists
+  chipHitMapFilteredHists.clear();
+  // Raw occupancy graphs
+  chipOccRawGrs.clear();
+  // Filtered occupancy graphs
+  chipOccFilteredGrs.clear();
+}
+
+void Preprocessor::Stats::print() {
+  TCanvas c = TCanvas(runPrefix.c_str(), "", 800, 800);
+  c.GetPad(1);
+  c.SetMargin(0.1, 0.1, 0.1, 0.1);
+
+  c.SetGridx(1);
+  c.SetGridy(1);
+
+  c.SetLogx(0);
+  c.SetLogy(0);
+
+  LegendPainterConfig legCfg;
+  legCfg.draw = true;
+  legCfg.option = "p";
+
+  std::string cOptionFirst = runPrefix + ".pdf(";
+  std::string cOptionLast = runPrefix + ".pdf)";
+  std::string cOption = runPrefix + ".pdf";
+
+  HistPainterConfig eventSplitCfg;
+  eventSplitCfg.yTitle = "Count";
+  eventSplitCfg.option = "hist text";
+
+  eventCategotyHist.Fill("nEventsTotal", nEventsTotal);
+  eventCategotyHist.Fill("nEventsAccepted", nEventsAccepted);
+  eventCategotyHist.Fill("nEventsUnshuttered", nEventsUnshuttered);
+  eventCategotyHist.Fill("nEventsEvenPID", nEventsEvenPID);
+  eventCategotyHist.Fill("nEventsOddPID", nEventsOddPID);
+  eventCategotyHist.Fill("nEventsFullDetEvenPID", nEventsFullDetEvenPID);
+  eventCategotyHist.Fill("nEventsFullDetOddPID", nEventsFullDetOddPID);
+  saveHist(c, cOptionFirst, {{eventCategotyHist, eventSplitCfg}});
+
+  // PMT_S20_3060
+  GraphPainterConfig gr_PMT_S20_3060_Raw_Cfg;
+  gr_PMT_S20_3060_Raw_Cfg.legTitle = "Raw";
+  gr_PMT_S20_3060_Raw_Cfg.printTitle = true;
+  gr_PMT_S20_3060_Raw.SetNameTitle("gr_PMT_S20_3060", "gr_PMT_S20_3060");
+  GraphPainterConfig gr_PMT_S20_3060_Filtered_Cfg;
+  gr_PMT_S20_3060_Filtered_Cfg.option = "P";
+  gr_PMT_S20_3060_Filtered_Cfg.color = kRed;
+  gr_PMT_S20_3060_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_PMT_S20_3060_Raw, gr_PMT_S20_3060_Raw_Cfg},
+             {gr_PMT_S20_3060_Filtered, gr_PMT_S20_3060_Filtered_Cfg}},
+            legCfg);
+
+  // PMT_S20_3070
+  GraphPainterConfig gr_PMT_S20_3070_Raw_Cfg;
+  gr_PMT_S20_3070_Raw_Cfg.legTitle = "Raw";
+  gr_PMT_S20_3070_Raw_Cfg.printTitle = true;
+  gr_PMT_S20_3070_Raw.SetNameTitle("gr_PMT_S20_3070", "gr_PMT_S20_3070");
+  GraphPainterConfig gr_PMT_S20_3070_Filtered_Cfg;
+  gr_PMT_S20_3070_Filtered_Cfg.option = "P";
+  gr_PMT_S20_3070_Filtered_Cfg.color = kRed;
+  gr_PMT_S20_3070_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_PMT_S20_3070_Raw, gr_PMT_S20_3070_Raw_Cfg},
+             {gr_PMT_S20_3070_Filtered, gr_PMT_S20_3070_Filtered_Cfg}},
+            legCfg);
+
+  // PMT_S20_3179
+  GraphPainterConfig gr_PMT_S20_3179_Raw_Cfg;
+  gr_PMT_S20_3179_Raw_Cfg.legTitle = "Raw";
+  gr_PMT_S20_3179_Raw_Cfg.printTitle = true;
+  gr_PMT_S20_3179_Raw.SetNameTitle("gr_PMT_S20_3179", "gr_PMT_S20_3179");
+  GraphPainterConfig gr_PMT_S20_3179_Filtered_Cfg;
+  gr_PMT_S20_3179_Filtered_Cfg.option = "P";
+  gr_PMT_S20_3179_Filtered_Cfg.color = kRed;
+  gr_PMT_S20_3179_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_PMT_S20_3179_Raw, gr_PMT_S20_3179_Raw_Cfg},
+             {gr_PMT_S20_3179_Filtered, gr_PMT_S20_3179_Filtered_Cfg}},
+            legCfg);
+
+  // PMT_S20_3350
+  GraphPainterConfig gr_PMT_S20_3350_Raw_Cfg;
+  gr_PMT_S20_3350_Raw_Cfg.legTitle = "Raw";
+  gr_PMT_S20_3350_Raw_Cfg.printTitle = true;
+  gr_PMT_S20_3350_Raw.SetNameTitle("gr_PMT_S20_3350", "gr_PMT_S20_3350");
+  GraphPainterConfig gr_PMT_S20_3350_Filtered_Cfg;
+  gr_PMT_S20_3350_Filtered_Cfg.option = "P";
+  gr_PMT_S20_3350_Filtered_Cfg.color = kRed;
+  gr_PMT_S20_3350_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_PMT_S20_3350_Raw, gr_PMT_S20_3350_Raw_Cfg},
+             {gr_PMT_S20_3350_Filtered, gr_PMT_S20_3350_Filtered_Cfg}},
+            legCfg);
+
+  // PMT_S20_3360
+  GraphPainterConfig gr_PMT_S20_3360_Raw_Cfg;
+  gr_PMT_S20_3360_Raw_Cfg.legTitle = "Raw";
+  gr_PMT_S20_3360_Raw_Cfg.printTitle = true;
+  gr_PMT_S20_3360_Raw.SetNameTitle("gr_PMT_S20_3360", "gr_PMT_S20_3360");
+  GraphPainterConfig gr_PMT_S20_3360_Filtered_Cfg;
+  gr_PMT_S20_3360_Filtered_Cfg.option = "P";
+  gr_PMT_S20_3360_Filtered_Cfg.color = kRed;
+  gr_PMT_S20_3360_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_PMT_S20_3360_Raw, gr_PMT_S20_3360_Raw_Cfg},
+             {gr_PMT_S20_3360_Filtered, gr_PMT_S20_3360_Filtered_Cfg}},
+            legCfg);
+
+  // TORO_LI20_1988_TMIT_PC
+  GraphPainterConfig gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg;
+  gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg.legTitle = "Raw";
+  gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg.printTitle = true;
+  gr_TORO_LI20_1988_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_1988_TMIT_PC",
+                                             "gr_TORO_LI20_1988_TMIT_PC");
+  GraphPainterConfig gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg;
+  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.option = "P";
+  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.color = kRed;
+  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_TORO_LI20_1988_TMIT_PC_Raw, gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg},
+             {gr_TORO_LI20_1988_TMIT_PC_Filtered,
+              gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg}},
+            legCfg);
+
+  // TORO_LI20_2040_TMIT_PC
+  GraphPainterConfig gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg;
+  gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg.legTitle = "Raw";
+  gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg.printTitle = true;
+  gr_TORO_LI20_2040_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_2040_TMIT_PC",
+                                             "gr_TORO_LI20_2040_TMIT_PC");
+  GraphPainterConfig gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg;
+  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.option = "P";
+  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.color = kRed;
+  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_TORO_LI20_2040_TMIT_PC_Raw, gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg},
+             {gr_TORO_LI20_2040_TMIT_PC_Filtered,
+              gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg}},
+            legCfg);
+
+  // TORO_LI20_2452_TMIT_PC
+  GraphPainterConfig gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg;
+  gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg.legTitle = "Raw";
+  gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg.printTitle = true;
+  gr_TORO_LI20_2452_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_2452_TMIT_PC",
+                                             "gr_TORO_LI20_2452_TMIT_PC");
+  GraphPainterConfig gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg;
+  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.option = "P";
+  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.color = kRed;
+  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_TORO_LI20_2452_TMIT_PC_Raw, gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg},
+             {gr_TORO_LI20_2452_TMIT_PC_Filtered,
+              gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg}},
+            legCfg);
+
+  // TORO_LI20_3163_TMIT_PC
+  GraphPainterConfig gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg;
+  gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg.legTitle = "Raw";
+  gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg.printTitle = true;
+  gr_TORO_LI20_3163_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_3163_TMIT_PC",
+                                             "gr_TORO_LI20_3163_TMIT_PC");
+  GraphPainterConfig gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg;
+  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.option = "P";
+  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.color = kRed;
+  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_TORO_LI20_3163_TMIT_PC_Raw, gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg},
+             {gr_TORO_LI20_3163_TMIT_PC_Filtered,
+              gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg}},
+            legCfg);
+
+  // TORO_LI20_3255_TMIT_PC
+  GraphPainterConfig gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg;
+  gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg.legTitle = "Raw";
+  gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg.printTitle = true;
+  gr_TORO_LI20_3255_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_3255_TMIT_PC",
+                                             "gr_TORO_LI20_3255_TMIT_PC");
+  GraphPainterConfig gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg;
+  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.option = "P";
+  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.color = kRed;
+  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
+  saveGraph(c, cOption,
+            {{gr_TORO_LI20_3255_TMIT_PC_Raw, gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg},
+             {gr_TORO_LI20_3255_TMIT_PC_Filtered,
+              gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg}},
+            legCfg);
+
+  GraphPainterConfig grOccRawCfg;
+  grOccRawCfg.xTitle = "EventId";
+  grOccRawCfg.yTitle = "Clusters";
+  grOccRawCfg.legTitle = "Raw";
+  grOccRawCfg.printTitle = true;
+  GraphPainterConfig grOccFiltered;
+  grOccFiltered.option = "P";
+  grOccFiltered.color = kRed;
+  grOccFiltered.legTitle = "Filtered";
+  for (int id : chipIds) {
+    auto &grRaw = chipOccRawGrs.at(id);
+    std::string grName = runPrefix + "ChipOccRaw" + std::to_string(id);
+    grRaw.SetNameTitle(grName.c_str(), grName.c_str());
+    saveGraph(
+        c, cOption,
+        {{grRaw, grOccRawCfg}, {chipOccFilteredGrs.at(id), grOccFiltered}},
+        legCfg);
+  }
+
+  HistPainterConfig chipHitMapCfg;
+  chipHitMapCfg.xTitle = "Pix X";
+  chipHitMapCfg.yTitle = "Pix Y";
+  chipHitMapCfg.stats = true;
+  chipHitMapCfg.option = "colz";
+  for (int id : chipIds) {
+    saveHist(c, cOption, {{chipHitMapRawHists.at(id), chipHitMapCfg}});
+    saveHist(c, cOption, {{chipHitMapFilteredHists.at(id), chipHitMapCfg}});
+  }
+
+  HistPainterConfig dummyCfg;
+  TH1D dummy("dummy", "dummy", 100, 0, 100);
+  saveHist(c, cOptionLast, {{dummy, dummyCfg}});
 }

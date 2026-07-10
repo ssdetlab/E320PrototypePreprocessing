@@ -1,5 +1,5 @@
- target_sources(
-     dataPreprocessing
-     PRIVATE
-     Painters.cpp
- )
+target_sources(
+    dataPreprocessing
+    PRIVATE
+    Painters.cpp
+)

@@ -82,6 +82,11 @@ elseif(NOT ${ISMARCH2026} EQUAL -1)
   )
 endif()
 
+add_executable(
+    computeROIs 
+    computeROIs.cpp
+)
+
 target_include_directories(
     dataPreprocessing
     PUBLIC
@@ -90,7 +95,16 @@ target_include_directories(
     ${EUDAQ_INCLUDE_DIRS}/../user/stave/hardware/inc
  )
 
+target_include_directories(
+    computeROIs
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    ${EUDAQ_INCLUDE_DIRS}/../user/stave/module/inc
+    ${EUDAQ_INCLUDE_DIRS}/../user/stave/hardware/inc
+ )
+
 add_subdirectory(src/Analysis)
+add_subdirectory(src/ROI)
 add_subdirectory(src/detail)
 
 target_link_libraries(
@@ -107,4 +121,20 @@ target_link_libraries(
     eudaq::stave
     eudaq::detector_event
     DetEventClusteredDict 
+)
+
+target_link_libraries(
+  computeROIs
+  PUBLIC
+  OpenMP::OpenMP_CXX
+  Eigen3::Eigen
+  ROOT::Core
+  ROOT::Hist
+  ROOT::HistPainter
+  ROOT::RIO
+  ROOT::Tree
+  ROOT::Physics
+  eudaq::stave
+  eudaq::detector_event
+  DetEventClusteredDict 
 )

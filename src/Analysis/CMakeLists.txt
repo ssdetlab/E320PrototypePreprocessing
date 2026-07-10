@@ -10,13 +10,6 @@ elseif(NOT ${ISMARCH2026} EQUAL -1)
   target_sources(
       dataPreprocessing
       PRIVATE
-      # AnalysisFunctionsMap.cpp
       PreprocessorMap.cpp
   )
 endif()
-
-target_sources(
-    dataPreprocessing
-    PRIVATE
-    Stats.cpp
-)
