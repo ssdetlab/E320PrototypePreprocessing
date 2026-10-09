@@ -87,11 +87,6 @@ add_executable(
     computeROIs.cpp
 )
 
-add_executable(
-    computeClusters 
-    computeClusters.cpp
-)
-
 target_include_directories(
     dataPreprocessing
     PUBLIC
@@ -102,14 +97,6 @@ target_include_directories(
 
 target_include_directories(
     computeROIs
-    PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    ${EUDAQ_INCLUDE_DIRS}/../user/stave/module/inc
-    ${EUDAQ_INCLUDE_DIRS}/../user/stave/hardware/inc
- )
-
-target_include_directories(
-    computeClusters
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${EUDAQ_INCLUDE_DIRS}/../user/stave/module/inc
@@ -138,22 +125,6 @@ target_link_libraries(
 
 target_link_libraries(
   computeROIs
-  PUBLIC
-  OpenMP::OpenMP_CXX
-  Eigen3::Eigen
-  ROOT::Core
-  ROOT::Hist
-  ROOT::HistPainter
-  ROOT::RIO
-  ROOT::Tree
-  ROOT::Physics
-  eudaq::stave
-  eudaq::detector_event
-  DetEventClusteredDict 
-)
-
-target_link_libraries(
-  computeClusters
   PUBLIC
   OpenMP::OpenMP_CXX
   Eigen3::Eigen
