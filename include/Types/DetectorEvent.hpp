@@ -9,149 +9,163 @@
 
 namespace E320Io {
 
+/// @brief BPM readout frame
 class BPMEvent {
-public:
-  double meanX;
-  double meanY;
+ public:
+  /// XY beam centroid coordinates
+  double meanX = 0;
+  double meanY = 0;
 
-  double stdDevX;
-  double stdDevY;
+  /// Width of the centroid distribution
+  double stdDevX = 0;
+  double stdDevY = 0;
 
-  std::size_t id;
+  /// BPM Id
+  std::size_t id = 0;
 
-  ClassDef(BPMEvent, 4);
+  ClassDef(BPMEvent, 5);
 };
 
+/// @brief ALPIDE readout frame
 class ChipEvent {
-public:
+ public:
+  /// @brief Pixel cluster struct
   struct Cluster {
+    /// Cluster geometric center in
+    /// local chip coordinates
     double xCenter;
     double yCenter;
 
-    std::size_t dx;
-    std::size_t dy;
-    std::size_t cl_size;
+    /// Cluster length in local chip
+    /// coordinates
+    std::size_t dx = 0;
+    std::size_t dy = 0;
+
+    /// Number of pixels in the cluster
+    std::size_t clSize = 0;
+
+    /// Cluster pixels list
+    std::vector<std::pair<std::uint16_t, std::uint16_t>> pixels;
   };
 
-  // hit map of the chip in the event
+  /// Hit map of the chip in the event
   std::vector<Cluster> hits;
 
-  // ALPIDE readout flags
-  bool is_busy_violation;
-  bool is_flushed_incomplete;
-  bool is_strobe_extended;
-  bool is_busy_transition;
+  /// ALPIDE readout flags
+  bool isBusyViolation = false;
+  bool isFlushedIncomplete = false;
+  bool isStrobeExtended = false;
+  bool isBusyTransition = false;
 
-  // MOSAIC readout flags
-  bool end_of_run;
-  bool overflow;
-  bool timeout;
-  bool header_error;
-  bool decoder_10b8b_error;
-  bool event_oversize_error;
+  /// MOSAIC readout flags
+  bool endOfRun = false;
+  bool overflow = false;
+  bool timeout = false;
+  bool headerError = false;
+  bool decoder10b8bError = false;
+  bool eventOversizeError = false;
 
-  // chip identificators
-  std::uint8_t chip_id;
-  std::uint8_t channel;
+  /// Chip identificators
+  std::uint8_t chipId = 0;
+  std::uint8_t channel = 0;
 
-  ClassDef(ChipEvent, 4);
+  ClassDef(ChipEvent, 5);
 };
 
 class StaveEvent {
-public:
-  // chip event storage
-  std::vector<ChipEvent> ch_ev_buffer;
+ public:
+  /// Chip event storage
+  std::vector<ChipEvent> chipEventBuffer;
 
-  // stave identificator
-  std::uint8_t stave_id;
+  /// Stave identificator
+  std::uint8_t staveId = 0;
 
-  ClassDef(StaveEvent, 3);
+  ClassDef(StaveEvent, 4);
 };
 
 class DetectorEvent {
-public:
-  // stave event storage
-  std::vector<StaveEvent> st_ev_buffer;
+ public:
+  /// Stave event storage
+  std::vector<StaveEvent> staveEventBuffer;
 
-  std::vector<BPMEvent> bpm_ev_buffer;
+  std::vector<BPMEvent> bpmEventBuffer;
 
-  // event MOSAIC trigger ID
-  std::uint64_t trg_n;
+  /// Event MOSAIC trigger ID
+  std::uint64_t trgN = 0;
 
-  // UNIX timestamp in ms
-  std::uint64_t ts_begin;
-  std::uint64_t ts_end;
+  /// UNIX timestamp in ms
+  std::uint64_t tsBegin = 0;
+  std::uint64_t tsEnd = 0;
 
-  // EPICS parity
-  std::size_t epicsParity;
-  // EPICS PID
-  std::size_t epicsPID;
-  // EPICS DAQ number
-  std::size_t epicsDAQNumber;
+  /// EPICS parity
+  std::size_t epicsParity = 0;
+  /// EPICS PID
+  std::size_t epicsPID = 0;
+  /// EPICS DAQ number
+  std::size_t epicsDAQNumber = 0;
 
-  // Run number
-  std::uint32_t run_number;
+  /// Run number
+  std::uint32_t runNumber = 0;
 
-  ClassDef(DetectorEvent, 6);
+  ClassDef(DetectorEvent, 7);
 };
 
 class ChipRunMeta {
-public:
-  // chip identificator
-  std::uint8_t chip_id;
+ public:
+  /// Chip identificator
+  std::uint8_t chipId = 0;
 
-  // number of received triggers
-  std::uint16_t n_trigs;
+  /// Number of received triggers
+  std::uint16_t nTrigs = 0;
 
-  // number of generated strobes
-  std::uint16_t n_strobes;
+  /// Number of generated strobes
+  std::uint16_t nStrobes = 0;
 
-  // number of matrix readouts
-  std::uint16_t n_matrix_readouts;
+  /// Number of matrix readouts
+  std::uint16_t nMatrixReadouts = 0;
 
-  // number of sent frames
-  std::uint16_t n_frames;
+  /// Number of sent frames
+  std::uint16_t nFrames = 0;
 
-  ClassDef(ChipRunMeta, 2);
+  ClassDef(ChipRunMeta, 3);
 };
 
 class StaveRunMeta {
-public:
-  // stave identificator
-  std::uint8_t stave_id;
+ public:
+  /// Stave identificator
+  std::uint8_t staveId;
 
-  // frames with data
-  std::uint32_t non_empty_frames;
+  /// Frames with data
+  std::uint32_t nonEmptyFrames;
 
-  // number of triggers received
-  // by MOSAIC
-  std::uint32_t n_trigs_mosaic;
+  /// Number of triggers received
+  /// by MOSAIC
+  std::uint32_t nTrigsMosaic;
 
-  // ALPIDE meta data
-  std::vector<ChipRunMeta> chips_rmd;
+  /// ALPIDE meta data
+  std::vector<ChipRunMeta> chipsRmd;
 
-  ClassDef(StaveRunMeta, 2);
+  ClassDef(StaveRunMeta, 3);
 };
 
 class RunMeta {
-public:
-  using time_server_md =
-      std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>;
+ public:
+  using TimeServerMd = std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>;
 
-  // current run number
-  std::uint32_t run_number;
+  /// Current run number
+  std::uint32_t runNumber;
 
-  // UNIX timestamp in ms
-  std::uint64_t run_start;
-  std::uint64_t run_end;
+  /// UNIX timestamp in ms
+  std::uint64_t runStart;
+  std::uint64_t runEnd;
 
-  // Stave meta data
-  std::vector<StaveRunMeta> st_rmd;
+  /// Stave meta data
+  std::vector<StaveRunMeta> staveRmd;
 
-  // time server meta data
-  std::vector<time_server_md> ts_md;
+  /// Time server meta data
+  std::vector<TimeServerMd> tsMd;
 
-  ClassDef(RunMeta, 2);
+  ClassDef(RunMeta, 3);
 };
 
-} // namespace E320Io
+}  // namespace E320Io

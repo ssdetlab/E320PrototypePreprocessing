@@ -12,13 +12,12 @@
 
 #include "Analysis/PVList.hpp"
 #include "ROI/ButterflyROI.hpp"
-#include "ROI/EllipseROI.hpp"
 #include "ROI/UnboundedROI.hpp"
 #include "TCanvas.h"
 #include "detail/Painters.hpp"
 
-std::map<std::string, Preprocessor::PathCollection>
-Preprocessor::collectDataPaths(const Options &opt) const {
+std::map<std::string, PathCollection> Preprocessor::collectDataPaths(
+    const Options &opt) const {
   std::cout << "Collecting data paths from\n" << opt.inDataDir << "\n";
 
   // Collect directories with run data
@@ -308,10 +307,10 @@ void Preprocessor::processFiles(const Options &opt) const {
         globalStats.nEventsOddPID++;
       }
 
-      outDetEvent.trg_n = detEvent->trg_n;
-      outDetEvent.ts_begin = detEvent->ts_begin;
-      outDetEvent.ts_end = detEvent->ts_end;
-      outDetEvent.run_number = detEvent->run_number;
+      outDetEvent.trgN = detEvent->trg_n;
+      outDetEvent.tsBegin = detEvent->ts_begin;
+      outDetEvent.tsEnd = detEvent->ts_end;
+      outDetEvent.runNumber = detEvent->run_number;
       outDetEvent.epicsParity = isEven ? 0 : 1;
       outDetEvent.epicsPID = std::round((epicsPID - 10) / 36) * 36 + 10;
       outDetEvent.epicsDAQNumber = getPv(detEvent, epics_daq_number_key);
@@ -347,7 +346,7 @@ void Preprocessor::processFiles(const Options &opt) const {
       bpm3315Ev.stdDevY = 0.1;
       bpm3315Ev.id = 3315;
 
-      outDetEvent.bpm_ev_buffer = {bpm3156Ev, bpm3218Ev, bpm3265Ev, bpm3315Ev};
+      outDetEvent.bpmEventBuffer = {bpm3156Ev, bpm3218Ev, bpm3265Ev, bpm3315Ev};
 
       quad1Grad = convertEpicsQuad(getPv(detEvent, li20_lgps_3141_bact));
       quad2Grad = convertEpicsQuad(getPv(detEvent, li20_lgps_3261_bact));
@@ -361,7 +360,7 @@ void Preprocessor::processFiles(const Options &opt) const {
       for (const auto &staveEv : detEvent->st_ev_buffer) {
         E320Io::StaveEvent outStaveEvent;
 
-        outStaveEvent.stave_id = staveEv.stave_id;
+        outStaveEvent.staveId = staveEv.stave_id;
         std::vector<E320Io::ChipEvent> outChipEvents;
         outChipEvents.reserve(staveEv.ch_ev_buffer.size());
         for (const auto &chipEv : staveEv.ch_ev_buffer) {
@@ -370,20 +369,20 @@ void Preprocessor::processFiles(const Options &opt) const {
           E320Io::ChipEvent outChipEvent;
 
           // ALPIDE readout flags
-          outChipEvent.is_busy_violation = chipEv.is_busy_violation;
-          outChipEvent.is_flushed_incomplete = chipEv.is_flushed_incomplete;
-          outChipEvent.is_strobe_extended = chipEv.is_strobe_extended;
-          outChipEvent.is_busy_transition = chipEv.is_busy_transition;
+          outChipEvent.isBusyViolation = chipEv.is_busy_violation;
+          outChipEvent.isFlushedIncomplete = chipEv.is_flushed_incomplete;
+          outChipEvent.isStrobeExtended = chipEv.is_strobe_extended;
+          outChipEvent.isBusyTransition = chipEv.is_busy_transition;
 
           // MOSAIC readout flags
-          outChipEvent.end_of_run = chipEv.end_of_run;
+          outChipEvent.endOfRun = chipEv.end_of_run;
           outChipEvent.overflow = chipEv.overflow;
           outChipEvent.timeout = chipEv.timeout;
-          outChipEvent.header_error = chipEv.header_error;
-          outChipEvent.decoder_10b8b_error = chipEv.decoder_10b8b_error;
-          outChipEvent.event_oversize_error = chipEv.event_oversize_error;
+          outChipEvent.headerError = chipEv.header_error;
+          outChipEvent.decoder10b8bError = chipEv.decoder_10b8b_error;
+          outChipEvent.eventOversizeError = chipEv.event_oversize_error;
 
-          outChipEvent.chip_id = chipEv.chip_id;
+          outChipEvent.chipId = chipEv.chip_id;
           outChipEvent.channel = chipEv.channel;
 
           // Collect hits
@@ -401,10 +400,9 @@ void Preprocessor::processFiles(const Options &opt) const {
           }
 
           // Fill non-ROId hit map
-          localStats.chipOccRawGrs.at(outChipEvent.chip_id)
-              .SetPoint(
-                  localStats.chipOccRawGrs.at(outChipEvent.chip_id).GetN(),
-                  eventId, clusters.size());
+          localStats.chipOccRawGrs.at(outChipEvent.chipId)
+              .SetPoint(localStats.chipOccRawGrs.at(outChipEvent.chipId).GetN(),
+                        eventId, clusters.size());
           for (const auto &hit : clusters) {
             localStats.chipHitMapRawHists.at(chipEv.chip_id)
                 .Fill(hit.xCenter, hit.yCenter);
@@ -413,7 +411,7 @@ void Preprocessor::processFiles(const Options &opt) const {
           // Pass hits through the ROI
           outChipEvent.hits.reserve(clusters.size());
           for (const auto &cl : clusters) {
-            if (rois.at(outChipEvent.chip_id)
+            if (rois.at(outChipEvent.chipId)
                     ->isInside(cl.xCenter, cl.yCenter)) {
               outChipEvent.hits.push_back(cl);
             }
@@ -430,12 +428,12 @@ void Preprocessor::processFiles(const Options &opt) const {
           }
 
           // Fill ROId hit map
-          localStats.chipOccFilteredGrs.at(outChipEvent.chip_id)
+          localStats.chipOccFilteredGrs.at(outChipEvent.chipId)
               .SetPoint(
-                  localStats.chipOccFilteredGrs.at(outChipEvent.chip_id).GetN(),
+                  localStats.chipOccFilteredGrs.at(outChipEvent.chipId).GetN(),
                   eventId, outChipEvent.hits.size());
           for (const auto &hit : outChipEvent.hits) {
-            localStats.chipHitMapFilteredHists.at(outChipEvent.chip_id)
+            localStats.chipHitMapFilteredHists.at(outChipEvent.chipId)
                 .Fill(hit.xCenter, hit.yCenter);
           }
 
@@ -446,7 +444,7 @@ void Preprocessor::processFiles(const Options &opt) const {
         if (outChipEvents.size() != opt.chipIds.size()) {
           continue;
         }
-        outStaveEvent.ch_ev_buffer = outChipEvents;
+        outStaveEvent.chipEventBuffer = outChipEvents;
         outStaveEvents.push_back(std::move(outStaveEvent));
       }
 
@@ -463,7 +461,7 @@ void Preprocessor::processFiles(const Options &opt) const {
         continue;
       }
 
-      outDetEvent.st_ev_buffer = outStaveEvents;
+      outDetEvent.staveEventBuffer = outStaveEvents;
       outDataTree->Fill();
       outMagFieldTree->Fill();
 
@@ -864,10 +862,6 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(
       badEvents.insert(i);
       continue;
     }
-    if (pmt_s20_3070_val > 1000) {
-      badEvents.insert(i);
-      continue;
-    }
     // PMT_S20_3179
     if (isBadUpper(accStateMean.pmt_s20_3179, accStateStdDev.pmt_s20_3179,
                    pmt_s20_3179_val)) {
@@ -996,7 +990,8 @@ std::vector<Preprocessor::Cluster> Preprocessor::getClusters(
     xCenter /= clusterPixels.size();
     yCenter /= clusterPixels.size();
 
-    clusters.push_back(Cluster{xCenter, yCenter, dx, dy, clSize});
+    clusters.push_back(
+        Cluster{xCenter, yCenter, dx, dy, clSize, clusterPixels});
   }
 
   return clusters;

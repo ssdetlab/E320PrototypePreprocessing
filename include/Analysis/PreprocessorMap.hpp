@@ -9,6 +9,7 @@
 #include <Eigen/Eigen>
 
 #include "AcceleratorState.hpp"
+#include "Analysis/PathCollection.hpp"
 #include "DetectorEvent.h"
 #include "ROI/ROI.hpp"
 #include "TChain.h"
@@ -73,22 +74,6 @@ class Preprocessor {
     bool excludeShuttered;
   };
 
-  /// @brief run data paths container
-  struct PathCollection {
-    /// Prefix of the run files
-    std::string runPrefix = "";
-    /// Parent path of the run files
-    std::string parentPath = "";
-    /// Collection of the run files
-    std::vector<std::string> inPaths{};
-    /// Output path
-    std::string outPath = "";
-    /// Number of events to skip in the beginning
-    std::size_t skip = 0;
-    /// Number of events to skip in the end
-    std::size_t stop = 0;
-  };
-
   /// @brief Output diagnostic plots struct
   struct Stats {
     Stats() = default;
@@ -137,24 +122,28 @@ class Preprocessor {
     std::map<int, TGraph> chipOccRawGrs;
     /// Filtered occupancy graphs
     std::map<int, TGraph> chipOccFilteredGrs;
+
     /// Raw PMTs
     TGraph gr_PMT_S20_3060_Raw;
     TGraph gr_PMT_S20_3070_Raw;
     TGraph gr_PMT_S20_3179_Raw;
     TGraph gr_PMT_S20_3350_Raw;
     TGraph gr_PMT_S20_3360_Raw;
+
     /// Filtered PMTs
     TGraph gr_PMT_S20_3060_Filtered;
     TGraph gr_PMT_S20_3070_Filtered;
     TGraph gr_PMT_S20_3179_Filtered;
     TGraph gr_PMT_S20_3350_Filtered;
     TGraph gr_PMT_S20_3360_Filtered;
+
     /// Raw toroids
     TGraph gr_TORO_LI20_1988_TMIT_PC_Raw;
     TGraph gr_TORO_LI20_2040_TMIT_PC_Raw;
     TGraph gr_TORO_LI20_2452_TMIT_PC_Raw;
     TGraph gr_TORO_LI20_3163_TMIT_PC_Raw;
     TGraph gr_TORO_LI20_3255_TMIT_PC_Raw;
+
     /// Filtered toroids
     TGraph gr_TORO_LI20_1988_TMIT_PC_Filtered;
     TGraph gr_TORO_LI20_2040_TMIT_PC_Filtered;
