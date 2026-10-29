@@ -55,6 +55,7 @@ include_directories(
 ROOT_GENERATE_DICTIONARY(
     G__DetEventClusteredDict 
     ./include/Types/DetectorEvent.hpp
+    ./include/Types/ROOTDictDefs.h
     MODULE 
     DetEventClusteredDict 
     LINKDEF 
@@ -68,27 +69,6 @@ target_link_libraries(
     ROOT::GeomPainter
     eudaq::stave
     eudaq::detector_event
-)
-
-# Dictionary for the sim data
-add_library(SimEventDict SHARED)
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/detail
-)
-ROOT_GENERATE_DICTIONARY(
-    G__SimEventDict
-    ./include/detail/ROOTDictDefs.h
-    MODULE 
-    SimEventDict 
-    LINKDEF 
-    ./include/detail/LinkDef.h
-)
-target_link_libraries(
-    SimEventDict 
-    PRIVATE 
-    ROOT::RIO
-    ROOT::Physics
-    ROOT::GeomPainter
 )
 
 if (NOT ${ISFEB2025} EQUAL -1)
@@ -182,5 +162,5 @@ target_link_libraries(
   ROOT::RIO
   ROOT::Tree
   ROOT::Physics
-  SimEventDict
+  DetEventClusteredDict
 )
