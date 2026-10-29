@@ -138,14 +138,22 @@ void Preprocessor::processFiles(const Options &opt) const {
     std::string roiPath = opt.inROIDir + "/" + runPrefix + ".csv";
     auto rois = getROIs(roiPath, opt);
 
+    // --------------------------------------------------
     // Initialize stats
     Stats localStats;
     localStats.init(runPrefix, opt.chipIds);
 
-    // Get data tree
-    auto [inFile, inChain, inTree] =
+    // --------------------------------------------------
+    // Get tracker data tree
+    auto [inTrackerFile, inTrackerChain, inTrackerTree] =
         getFileHandle(opt.inDataTreeName, collection.inPaths);
 
+    // --------------------------------------------------
+    // Initialize tracker branches
+    detector_event *detEvent = nullptr;
+    inTrackerTree->SetBranchAddress("event", &detEvent);
+
+    // --------------------------------------------------
     // Output files
     if (auto parentPath =
             std::filesystem::path(collection.outPath).parent_path();
@@ -158,21 +166,12 @@ void Preprocessor::processFiles(const Options &opt) const {
     TTree *outMagFieldTree =
         new TTree(opt.outMagnetTreeName.c_str(), opt.outMagnetTreeName.c_str());
 
-    // Collect bad events
-    std::unordered_set<std::size_t> badEvents =
-        getBadEvents(inTree, collection.skip, opt);
-
-    // Initialize tree readout
-    detector_event *detEvent = nullptr;
-
+    // Output data tree branches
     E320Io::DetectorEvent outDetEvent;
     outDataTree->Branch("event", &outDetEvent);
     outDataTree->Branch("eventId", &eventId);
 
-    inTree->SetBranchAddress("event", &detEvent);
-    std::size_t nEntries = std::min(
-        static_cast<std::size_t>(inTree->GetEntries()), collection.stop);
-
+    // Output magnet tree branches
     double quadTripletFocusingEnergy = 0;
     double quadTripletObjectZ = 0;
     double quadTripletImageZ = 0;
@@ -197,10 +196,18 @@ void Preprocessor::processFiles(const Options &opt) const {
     outMagFieldTree->Branch("dipoleStrength", &dipoleStrength);
     outMagFieldTree->Branch("eventId", &eventId);
 
+    // --------------------------------------------------
+    // Collect bad events
+    std::unordered_set<std::size_t> badEvents =
+        getBadEvents(inTrackerTree, collection.skip, opt);
+
+    // --------------------------------------------------
     // Fill in accelerator events
+    std::size_t nEntries = std::min(
+        static_cast<std::size_t>(inTrackerTree->GetEntries()), collection.stop);
     std::cout << "Filling in accelerator data\n";
     for (std::size_t i = collection.skip; i < nEntries; i++) {
-      inTree->GetEntry(i);
+      inTrackerTree->GetEntry(i);
 
       try {
         // PMTs
@@ -276,7 +283,8 @@ void Preprocessor::processFiles(const Options &opt) const {
           getPv(detEvent, toro_li20_3255_tmit_pc_key));
     }
 
-    // Fill in the data
+    // --------------------------------------------------
+    // Fill in the tracker data
     std::cout << "Filling in data\n";
     for (std::size_t i = collection.skip; i < nEntries; i++) {
       // Total events
@@ -289,7 +297,7 @@ void Preprocessor::processFiles(const Options &opt) const {
       }
       localStats.nEventsAccepted++;
       globalStats.nEventsAccepted++;
-      inTree->GetEntry(i);
+      inTrackerTree->GetEntry(i);
 
       std::size_t epicsPID = 0;
       try {
