@@ -54,6 +54,7 @@ void PreprocessorSim::processFiles(const Options& opt) const {
   auto [inBeamFile, inBeamChain, inBeamTree] =
       getFileHandle(opt.inBeamTreeName, inBeamPaths);
 
+  // --------------------------------------------------
   // Output files
   TFile* outFile = new TFile(opt.outPath.c_str(), "RECREATE");
   TTree* outDataTree = nullptr;
@@ -192,7 +193,8 @@ void PreprocessorSim::processFiles(const Options& opt) const {
   inBeamTree->SetBranchAddress("referenceMomentumEst", &referenceBeamMomentum);
 
   // Reconstructed beam position covariance
-  inBeamTree->SetBranchAddress("referencePositionCov", &referenceBeamPositionCov);
+  inBeamTree->SetBranchAddress("referencePositionCov",
+                               &referenceBeamPositionCov);
 
   // Reconstructed beam momentum covariance
   inBeamTree->SetBranchAddress("referenceAngleCov", &referenceBeamAngleCov);
@@ -230,7 +232,8 @@ void PreprocessorSim::processFiles(const Options& opt) const {
 
       for (std::size_t n = 0; n < clusterCov->GetNrows(); n++) {
         for (std::size_t m = 0; m < clusterCov->GetNcols(); m++) {
-          clusterCov->operator()(n, m) = referenceBeamPositionCov->operator()(n, m);
+          clusterCov->operator()(n, m) =
+              referenceBeamPositionCov->operator()(n, m);
         }
       }
       for (std::size_t n = 0; n < angleCov->GetNrows(); n++) {
