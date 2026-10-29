@@ -60,6 +60,17 @@ const std::string li20_lgps_3330_bact = "LI20:LGPS:3330:BACT";
 // LI20:XCOR:3276:BACT
 const std::string li20_xcor_3276_bact = "LI20:XCOR:3276:BACT";
 
+// Quadrupole triplet focuing energy key
+const std::string quad_focusing_energy_key = "SIOC:SYS1:ML00:CALCOUT051";
+// Quadrupole triplet object z key
+const std::string quad_object_z_key = "SIOC:SYS1:ML00:CALCOUT052";
+// Quadrupole triplet image z key
+const std::string quad_image_z_key = "SIOC:SYS1:ML00:CALCOUT053";
+// Quadrupole triplet M12 transport matrix element key
+const std::string quad_M12_key = "SIOC:SYS1:ML00:CALCOUT054";
+// Quadrupole triplet M34 transport matrix element key
+const std::string quad_M34_key = "SIOC:SYS1:ML00:CALCOUT055";
+
 //--------------------------------------------
 
 // PATT:SYS1:1:PULSEID
