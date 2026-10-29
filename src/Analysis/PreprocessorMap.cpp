@@ -337,36 +337,6 @@ void Preprocessor::processFiles(const Options &opt) const {
       std::vector<E320Io::StaveEvent> outStaveEvents;
       outStaveEvents.reserve(detEvent->st_ev_buffer.size());
 
-      E320Io::BPMEvent bpm3156Ev;
-      bpm3156Ev.meanX = getPv(detEvent, bpm_3156_x_key);
-      bpm3156Ev.meanY = getPv(detEvent, bpm_3156_y_key);
-      bpm3156Ev.stdDevX = 0.1;
-      bpm3156Ev.stdDevY = 0.1;
-      bpm3156Ev.id = 3156;
-
-      E320Io::BPMEvent bpm3218Ev;
-      bpm3218Ev.meanX = getPv(detEvent, bpm_quad0_3218_x_key);
-      bpm3218Ev.meanY = getPv(detEvent, bpm_quad0_3218_y_key);
-      bpm3218Ev.stdDevX = 0.1;
-      bpm3218Ev.stdDevY = 0.1;
-      bpm3218Ev.id = 3218;
-
-      E320Io::BPMEvent bpm3265Ev;
-      bpm3265Ev.meanX = getPv(detEvent, bpm_quad1_3265_x_key);
-      bpm3265Ev.meanY = getPv(detEvent, bpm_quad1_3265_y_key);
-      bpm3265Ev.stdDevX = 0.1;
-      bpm3265Ev.stdDevY = 0.1;
-      bpm3265Ev.id = 3265;
-
-      E320Io::BPMEvent bpm3315Ev;
-      bpm3315Ev.meanX = getPv(detEvent, bpm_quad2_3315_x_key);
-      bpm3315Ev.meanY = getPv(detEvent, bpm_quad2_3315_y_key);
-      bpm3315Ev.stdDevX = 0.1;
-      bpm3315Ev.stdDevY = 0.1;
-      bpm3315Ev.id = 3315;
-
-      outDetEvent.bpmEventBuffer = {bpm3156Ev, bpm3218Ev, bpm3265Ev, bpm3315Ev};
-
       quad1Grad = convertEpicsQuad(getPv(detEvent, li20_lgps_3141_bact));
       quad2Grad = convertEpicsQuad(getPv(detEvent, li20_lgps_3261_bact));
       quad3Grad = convertEpicsQuad(getPv(detEvent, li20_lgps_3091_bact));

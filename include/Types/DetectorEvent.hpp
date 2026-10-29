@@ -9,23 +9,6 @@
 
 namespace E320Io {
 
-/// @brief BPM readout frame
-class BPMEvent {
- public:
-  /// XY beam centroid coordinates
-  double meanX = 0;
-  double meanY = 0;
-
-  /// Width of the centroid distribution
-  double stdDevX = 0;
-  double stdDevY = 0;
-
-  /// BPM Id
-  std::size_t id = 0;
-
-  ClassDef(BPMEvent, 5);
-};
-
 /// @brief ALPIDE readout frame
 class ChipEvent {
  public:
@@ -88,8 +71,6 @@ class DetectorEvent {
   /// Stave event storage
   std::vector<StaveEvent> staveEventBuffer;
 
-  std::vector<BPMEvent> bpmEventBuffer;
-
   /// Event MOSAIC trigger ID
   std::uint64_t trgN = 0;
 
@@ -107,7 +88,7 @@ class DetectorEvent {
   /// Run number
   std::uint32_t runNumber = 0;
 
-  ClassDef(DetectorEvent, 7);
+  ClassDef(DetectorEvent, 8);
 };
 
 class ChipRunMeta {
