@@ -173,12 +173,23 @@ void Preprocessor::processFiles(const Options &opt) const {
     std::size_t nEntries = std::min(
         static_cast<std::size_t>(inTree->GetEntries()), collection.stop);
 
+    double quadTripletFocusingEnergy = 0;
+    double quadTripletObjectZ = 0;
+    double quadTripletImageZ = 0;
+    double quadTripletM12 = 0;
+    double quadTripletM34 = 0;
     double quad1Grad = 0;
     double quad2Grad = 0;
     double quad3Grad = 0;
     double xCorrectorStrength = 0;
     double dipoleStrength = 0;
 
+    outMagFieldTree->Branch("quadTripletFocusingEnergy",
+                            &quadTripletFocusingEnergy);
+    outMagFieldTree->Branch("quadTripletObjectZ", &quadTripletObjectZ);
+    outMagFieldTree->Branch("quadTripletImageZ", &quadTripletImageZ);
+    outMagFieldTree->Branch("quadTripletM12", &quadTripletM12);
+    outMagFieldTree->Branch("quadTripletM34", &quadTripletM34);
     outMagFieldTree->Branch("quad1Grad", &quad1Grad);
     outMagFieldTree->Branch("quad2Grad", &quad2Grad);
     outMagFieldTree->Branch("quad3Grad", &quad3Grad);
@@ -356,6 +367,11 @@ void Preprocessor::processFiles(const Options &opt) const {
                               opt.deflectionAngle, opt.dipoleLength);
       xCorrectorStrength = convertEpicsXCorrector(
           getPv(detEvent, li20_xcor_3276_bact), opt.xCorrectorLength);
+      quadTripletFocusingEnergy = getPv(detEvent, quad_focusing_energy_key);
+      quadTripletObjectZ = getPv(detEvent, quad_object_z_key);
+      quadTripletImageZ = getPv(detEvent, quad_image_z_key);
+      quadTripletM12 = getPv(detEvent, quad_M12_key);
+      quadTripletM34 = getPv(detEvent, quad_M34_key);
 
       for (const auto &staveEv : detEvent->st_ev_buffer) {
         E320Io::StaveEvent outStaveEvent;
