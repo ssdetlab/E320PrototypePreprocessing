@@ -47,7 +47,7 @@ find_package(
   REQUIRED
 )
 
-# Dictionary for the sim data
+# Dictionary for the data
 add_library(DetEventClusteredDict SHARED)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Types
@@ -70,6 +70,27 @@ target_link_libraries(
     eudaq::detector_event
 )
 
+# Dictionary for the sim data
+add_library(SimEventDict SHARED)
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/detail
+)
+ROOT_GENERATE_DICTIONARY(
+    G__SimEventDict
+    ./include/detail/ROOTDictDefs.h
+    MODULE 
+    SimEventDict 
+    LINKDEF 
+    ./include/detail/LinkDef.h
+)
+target_link_libraries(
+    SimEventDict 
+    PRIVATE 
+    ROOT::RIO
+    ROOT::Physics
+    ROOT::GeomPainter
+)
+
 if (NOT ${ISFEB2025} EQUAL -1)
   add_executable(
       dataPreprocessing 
@@ -87,6 +108,11 @@ add_executable(
     computeROIs.cpp
 )
 
+add_executable(
+    simPreprocessing 
+    mainSim.cpp
+)
+
 target_include_directories(
     dataPreprocessing
     PUBLIC
@@ -97,6 +123,14 @@ target_include_directories(
 
 target_include_directories(
     computeROIs
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    ${EUDAQ_INCLUDE_DIRS}/../user/stave/module/inc
+    ${EUDAQ_INCLUDE_DIRS}/../user/stave/hardware/inc
+ )
+
+target_include_directories(
+    simPreprocessing
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${EUDAQ_INCLUDE_DIRS}/../user/stave/module/inc
@@ -137,4 +171,16 @@ target_link_libraries(
   eudaq::stave
   eudaq::detector_event
   DetEventClusteredDict 
+)
+
+target_link_libraries(
+  simPreprocessing
+  PUBLIC
+  ROOT::Core
+  ROOT::Hist
+  ROOT::HistPainter
+  ROOT::RIO
+  ROOT::Tree
+  ROOT::Physics
+  SimEventDict
 )
