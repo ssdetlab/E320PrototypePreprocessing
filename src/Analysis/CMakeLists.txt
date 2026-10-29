@@ -13,3 +13,9 @@ elseif(NOT ${ISMARCH2026} EQUAL -1)
       PreprocessorMap.cpp
   )
 endif()
+
+target_sources(
+    simPreprocessing
+    PRIVATE
+    PreprocessorSim.cpp
+)
