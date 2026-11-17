@@ -201,6 +201,10 @@ void Preprocessor::processFiles(const Options &opt) const {
     std::unordered_set<std::size_t> badEvents =
         getBadEvents(inTrackerTree, collection.skip, opt);
 
+    // Restore the event branch address, getBadEvents
+    // points the branch to its own local event
+    inTrackerTree->SetBranchAddress("event", &detEvent);
+
     // --------------------------------------------------
     // Fill in accelerator events
     std::size_t nEntries = std::min(
