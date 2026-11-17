@@ -13,8 +13,14 @@ int main() {
   opt.inROIDir =
       "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_preprocessing/"
       "out_data/rois/local_alignment_data";
+  // Orbit reconstruction data directory path
+  opt.inOrbitDir =
+      "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_bpm_analysis/"
+      "out_data/data/global_2026_data";
   // Data tree name
   opt.inDataTreeName = "MyTree";
+  // Orbit reconstruction tree name
+  opt.inOrbitTreeName = "fitted-beam";
   // Output directory path
   opt.outDir =
       "/home/romanurmanov/work/E320/E320Prototype/"

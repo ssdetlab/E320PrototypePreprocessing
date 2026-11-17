@@ -14,6 +14,10 @@
 #include "ROI/ButterflyROI.hpp"
 #include "ROI/UnboundedROI.hpp"
 #include "TCanvas.h"
+#include "TLorentzVector.h"
+#include "TMatrixD.h"
+#include "TVector3.h"
+#include "TVectorD.h"
 #include "detail/Painters.hpp"
 
 std::map<std::string, PathCollection> Preprocessor::collectDataPaths(
@@ -54,6 +58,26 @@ std::map<std::string, PathCollection> Preprocessor::collectDataPaths(
     paths[runString].skip = 0;
     paths[runString].stop = std::numeric_limits<std::size_t>::max();
     std::sort(paths[runString].inPaths.begin(), paths[runString].inPaths.end());
+
+    // Collect the orbit reconstruction paths of the run
+    std::filesystem::path orbitDir = opt.inOrbitDir + "/" + runString;
+    if (!std::filesystem::is_directory(orbitDir)) {
+      throw std::runtime_error("Missing orbit reconstruction directory " +
+                               orbitDir.string());
+    }
+    for (const auto &entry :
+         std::filesystem::recursive_directory_iterator(orbitDir)) {
+      if (!entry.is_regular_file() || entry.path().extension() != ".root") {
+        continue;
+      }
+      paths[runString].inOrbitPaths.push_back(entry.path().string());
+    }
+    if (paths[runString].inOrbitPaths.empty()) {
+      throw std::runtime_error("No orbit reconstruction files in " +
+                               orbitDir.string());
+    }
+    std::sort(paths[runString].inOrbitPaths.begin(),
+              paths[runString].inOrbitPaths.end());
     idx++;
     if (idx > 2) {
       // break;
@@ -68,6 +92,10 @@ std::map<std::string, PathCollection> Preprocessor::collectDataPaths(
     std::cout << "Out path: " << collection.outPath << "\n";
     std::cout << "In paths:\n";
     for (const auto &inPath : collection.inPaths) {
+      std::cout << inPath << "\n";
+    }
+    std::cout << "In orbit paths:\n";
+    for (const auto &inPath : collection.inOrbitPaths) {
       std::cout << inPath << "\n";
     }
     std::cout << "---------------------------------------------\n";
@@ -154,6 +182,72 @@ void Preprocessor::processFiles(const Options &opt) const {
     inTrackerTree->SetBranchAddress("event", &detEvent);
 
     // --------------------------------------------------
+    // Get orbit reconstruction tree
+    auto [inOrbitFile, inOrbitChain, inOrbitTree] =
+        getFileHandle(opt.inOrbitTreeName, collection.inOrbitPaths);
+
+    // --------------------------------------------------
+    // Initialize orbit reconstruction branches
+
+    // EUDAQ event identifiers
+    UInt_t orbitRunNumber = 0;
+    ULong64_t orbitTrgN = 0;
+
+    // Reconstructed beam position at the reference
+    TVector3 *referencePositionEst = nullptr;
+
+    // Reconstructed beam momentum at the reference
+    TLorentzVector *referenceMomentumEst = nullptr;
+
+    // Covariance of the orbit fit at the reference
+    TMatrixD *referenceCov = nullptr;
+
+    // Beam covariance at the reference within one bunch
+    TMatrixD *referenceBeamCov = nullptr;
+
+    // Covariance at the reference due to the alignment uncertainty
+    TMatrixD *referenceAlignmentCov = nullptr;
+
+    // Shifts at the reference for the alignment samples
+    std::vector<TVectorD> *referenceAlignmentSampleShifts = nullptr;
+
+    // Covariance at the reference from the alignment samples
+    TMatrixD *referenceAlignmentSampleCov = nullptr;
+
+    // chi2 of the orbit fit
+    double referenceFitChi2Est = 0;
+
+    inOrbitTree->SetBranchAddress("runNumber", &orbitRunNumber);
+    inOrbitTree->SetBranchAddress("trgN", &orbitTrgN);
+    inOrbitTree->SetBranchAddress("referencePositionEst",
+                                  &referencePositionEst);
+    inOrbitTree->SetBranchAddress("referenceMomentumEst",
+                                  &referenceMomentumEst);
+    inOrbitTree->SetBranchAddress("referenceCov", &referenceCov);
+    inOrbitTree->SetBranchAddress("referenceBeamCov", &referenceBeamCov);
+    inOrbitTree->SetBranchAddress("referenceAlignmentCov",
+                                  &referenceAlignmentCov);
+    inOrbitTree->SetBranchAddress("referenceAlignmentSampleShifts",
+                                  &referenceAlignmentSampleShifts);
+    inOrbitTree->SetBranchAddress("referenceAlignmentSampleCov",
+                                  &referenceAlignmentSampleCov);
+    inOrbitTree->SetBranchAddress("referenceFitChi2Est", &referenceFitChi2Est);
+
+    // Map the EUDAQ event identifiers to the orbit entries
+    std::map<std::pair<std::uint32_t, std::uint64_t>, std::size_t> orbitEntries;
+    for (std::size_t i = 0; i < inOrbitTree->GetEntries(); i++) {
+      inOrbitTree->GetEntry(i);
+      auto [it, inserted] =
+          orbitEntries.insert({{orbitRunNumber, orbitTrgN}, i});
+      if (!inserted) {
+        throw std::runtime_error("Duplicate orbit reconstruction for run " +
+                                 std::to_string(orbitRunNumber) + " trigger " +
+                                 std::to_string(orbitTrgN));
+      }
+    }
+    std::size_t nEventsNoOrbit = 0;
+
+    // --------------------------------------------------
     // Output files
     if (auto parentPath =
             std::filesystem::path(collection.outPath).parent_path();
@@ -170,6 +264,32 @@ void Preprocessor::processFiles(const Options &opt) const {
     E320Io::DetectorEvent outDetEvent;
     outDataTree->Branch("event", &outDetEvent);
     outDataTree->Branch("eventId", &eventId);
+
+    // Output orbit reconstruction branches, the orbit prefix marks the
+    // quantities of the reconstructed beam orbit
+    TVector3 outOrbitReferencePositionEst;
+    TLorentzVector outOrbitReferenceMomentumEst;
+    TMatrixD outOrbitReferenceCov;
+    TMatrixD outOrbitReferenceBeamCov;
+    TMatrixD outOrbitReferenceAlignmentCov;
+    std::vector<TVectorD> outOrbitReferenceAlignmentSampleShifts;
+    TMatrixD outOrbitReferenceAlignmentSampleCov;
+    double outOrbitReferenceFitChi2Est = 0;
+
+    outDataTree->Branch("orbitReferencePositionEst",
+                        &outOrbitReferencePositionEst);
+    outDataTree->Branch("orbitReferenceMomentumEst",
+                        &outOrbitReferenceMomentumEst);
+    outDataTree->Branch("orbitReferenceCov", &outOrbitReferenceCov);
+    outDataTree->Branch("orbitReferenceBeamCov", &outOrbitReferenceBeamCov);
+    outDataTree->Branch("orbitReferenceAlignmentCov",
+                        &outOrbitReferenceAlignmentCov);
+    outDataTree->Branch("orbitReferenceAlignmentSampleShifts",
+                        &outOrbitReferenceAlignmentSampleShifts);
+    outDataTree->Branch("orbitReferenceAlignmentSampleCov",
+                        &outOrbitReferenceAlignmentSampleCov);
+    outDataTree->Branch("orbitReferenceFitChi2Est",
+                        &outOrbitReferenceFitChi2Est);
 
     // Output magnet tree branches
     double quadTripletFocusingEnergy = 0;
@@ -459,6 +579,29 @@ void Preprocessor::processFiles(const Options &opt) const {
         continue;
       }
 
+      // Continue if the event has no orbit reconstruction
+      auto orbitIt = orbitEntries.find({detEvent->run_number, detEvent->trg_n});
+      if (orbitIt == orbitEntries.end()) {
+        nEventsNoOrbit++;
+        continue;
+      }
+      inOrbitTree->GetEntry(orbitIt->second);
+
+      outOrbitReferencePositionEst = *referencePositionEst;
+      outOrbitReferenceMomentumEst = *referenceMomentumEst;
+      outOrbitReferenceCov.ResizeTo(*referenceCov);
+      outOrbitReferenceCov = *referenceCov;
+      outOrbitReferenceBeamCov.ResizeTo(*referenceBeamCov);
+      outOrbitReferenceBeamCov = *referenceBeamCov;
+      outOrbitReferenceAlignmentCov.ResizeTo(*referenceAlignmentCov);
+      outOrbitReferenceAlignmentCov = *referenceAlignmentCov;
+      outOrbitReferenceAlignmentSampleShifts.clear();
+      outOrbitReferenceAlignmentSampleShifts = *referenceAlignmentSampleShifts;
+      outOrbitReferenceAlignmentSampleCov.ResizeTo(
+          *referenceAlignmentSampleCov);
+      outOrbitReferenceAlignmentSampleCov = *referenceAlignmentSampleCov;
+      outOrbitReferenceFitChi2Est = referenceFitChi2Est;
+
       outDetEvent.staveEventBuffer = outStaveEvents;
       outDataTree->Fill();
       outMagFieldTree->Fill();
@@ -472,6 +615,9 @@ void Preprocessor::processFiles(const Options &opt) const {
     outDataTree->Write();
     outMagFieldTree->Write();
     outFile->Close();
+
+    std::cout << "Events without orbit reconstruction: " << nEventsNoOrbit
+              << "\n";
 
     localStats.print();
     localStats.reset();
