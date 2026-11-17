@@ -41,8 +41,12 @@ class Preprocessor {
     std::string inDataDir;
     /// ROI CSV data directory path
     std::string inROIDir;
+    /// Orbit reconstruction data directory path
+    std::string inOrbitDir;
     /// Data tree name
     std::string inDataTreeName;
+    /// Orbit reconstruction tree name
+    std::string inOrbitTreeName;
     /// Output directory path
     std::string outDir;
     /// Output data tree name
