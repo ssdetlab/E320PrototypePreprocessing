@@ -3,7 +3,7 @@
 #include <deque>
 #include <limits>
 
-std::vector<Cluster> ClusteringAlgorithm::getClusters(HitSet &hits) const {
+std::vector<Cluster> ClusteringAlgorithm::getClusters(HitSet hits) const {
   std::vector<Cluster> clusters;
 
   while (!hits.empty()) {
