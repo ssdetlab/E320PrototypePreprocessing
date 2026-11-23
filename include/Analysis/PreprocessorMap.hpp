@@ -9,6 +9,7 @@
 #include <Eigen/Eigen>
 
 #include "AcceleratorState.hpp"
+#include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PathCollection.hpp"
 #include "DetectorEvent.h"
 #include "ROI/ROI.hpp"
@@ -72,10 +73,10 @@ class Preprocessor {
     std::size_t maxHits;
     /// Maximum number of hits in the ROI
     std::size_t maxRoiHits;
-    /// Maximum cluster size
-    std::size_t maxClusterSize;
     /// Exclude shuttered events flag
     bool excludeShuttered;
+    /// Clustering algo
+    std::shared_ptr<ClusteringAlgorithm> clusteringAlgo;
   };
 
   /// @brief Output diagnostic plots struct
@@ -225,5 +226,4 @@ class Preprocessor {
   /// @return collection of "bad" BXs' tree entry numbers
   std::unordered_set<std::size_t> getBadEvents(TTree *tree, std::size_t skip,
                                                const Options &opt) const;
-
 };

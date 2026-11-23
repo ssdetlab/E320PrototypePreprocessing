@@ -7,6 +7,7 @@ elseif(NOT ${ISMARCH2026} EQUAL -1)
       dataPreprocessing
       PRIVATE
       PreprocessorMap.cpp
+      ClusteringAlgorithm.cpp
   )
 endif()
 
@@ -14,4 +15,5 @@ target_sources(
     simPreprocessing
     PRIVATE
     PreprocessorSim.cpp
+    ClusteringAlgorithm.cpp
 )

@@ -1,6 +1,16 @@
+#include <memory>
+
+#include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PreprocessorMap.hpp"
 
 int main() {
+  // Initialize clustering algorithm
+  ClusteringAlgorithm::Config clusteringAlgoCfg{};
+  // Maximum cluster size
+  clusteringAlgoCfg.maxClusterSize = 4;
+  auto clusteringAlgo =
+      std::make_shared<ClusteringAlgorithm>(clusteringAlgoCfg);
+
   Preprocessor preprocessor;
 
   Preprocessor::Options opt;
@@ -48,10 +58,9 @@ int main() {
   opt.maxHits = 1e6;
   // Maximum number of hits in the ROI
   opt.maxRoiHits = 1e6;
-  // Maximum cluster size
-  opt.maxClusterSize = 4;
   // Exclude shuttered events flag
   opt.excludeShuttered = false;
+  opt.clusteringAlgo = clusteringAlgo;
 
   preprocessor.processFiles(opt);
 };
