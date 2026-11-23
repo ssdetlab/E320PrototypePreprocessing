@@ -72,10 +72,7 @@ target_link_libraries(
 )
 
 if (NOT ${ISFEB2025} EQUAL -1)
-  add_executable(
-      dataPreprocessing 
-      mainMembers.cpp
-  )
+  message(FATAL_ERROR "Feb 2025 pipeline is deprecated")
 elseif(NOT ${ISMARCH2026} EQUAL -1)
   add_executable(
       dataPreprocessing 
