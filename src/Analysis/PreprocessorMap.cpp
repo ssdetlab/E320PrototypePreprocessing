@@ -202,11 +202,14 @@ void Preprocessor::processFiles(const Options &opt) const {
     // Covariance of the orbit fit at the reference
     TMatrixD *referenceCov = nullptr;
 
-    // Beam covariance at the reference within one bunch
-    TMatrixD *referenceBeamCov = nullptr;
+    // Covariance of the beam bunch parameters at the reference
+    TMatrixD *referenceBeamBunchCov = nullptr;
 
     // Covariance at the reference due to the alignment uncertainty
     TMatrixD *referenceAlignmentCov = nullptr;
+
+    // Covariance at the reference of the gradient dependent systematic
+    TMatrixD *referenceGradientSystematicCov = nullptr;
 
     // Shifts at the reference for the alignment samples
     std::vector<TVectorD> *referenceAlignmentSampleShifts = nullptr;
@@ -224,9 +227,12 @@ void Preprocessor::processFiles(const Options &opt) const {
     inOrbitTree->SetBranchAddress("referenceMomentumEst",
                                   &referenceMomentumEst);
     inOrbitTree->SetBranchAddress("referenceCov", &referenceCov);
-    inOrbitTree->SetBranchAddress("referenceBeamCov", &referenceBeamCov);
+    inOrbitTree->SetBranchAddress("referenceBeamBunchCov",
+                                  &referenceBeamBunchCov);
     inOrbitTree->SetBranchAddress("referenceAlignmentCov",
                                   &referenceAlignmentCov);
+    inOrbitTree->SetBranchAddress("referenceGradientSystematicCov",
+                                  &referenceGradientSystematicCov);
     inOrbitTree->SetBranchAddress("referenceAlignmentSampleShifts",
                                   &referenceAlignmentSampleShifts);
     inOrbitTree->SetBranchAddress("referenceAlignmentSampleCov",
@@ -270,8 +276,9 @@ void Preprocessor::processFiles(const Options &opt) const {
     TVector3 outOrbitReferencePositionEst;
     TLorentzVector outOrbitReferenceMomentumEst;
     TMatrixD outOrbitReferenceCov;
-    TMatrixD outOrbitReferenceBeamCov;
+    TMatrixD outOrbitReferenceBeamBunchCov;
     TMatrixD outOrbitReferenceAlignmentCov;
+    TMatrixD outOrbitReferenceGradientSystematicCov;
     std::vector<TVectorD> outOrbitReferenceAlignmentSampleShifts;
     TMatrixD outOrbitReferenceAlignmentSampleCov;
     double outOrbitReferenceFitChi2Est = 0;
@@ -281,9 +288,12 @@ void Preprocessor::processFiles(const Options &opt) const {
     outDataTree->Branch("orbitReferenceMomentumEst",
                         &outOrbitReferenceMomentumEst);
     outDataTree->Branch("orbitReferenceCov", &outOrbitReferenceCov);
-    outDataTree->Branch("orbitReferenceBeamCov", &outOrbitReferenceBeamCov);
+    outDataTree->Branch("orbitReferenceBeamBunchCov",
+                        &outOrbitReferenceBeamBunchCov);
     outDataTree->Branch("orbitReferenceAlignmentCov",
                         &outOrbitReferenceAlignmentCov);
+    outDataTree->Branch("orbitReferenceGradientSystematicCov",
+                        &outOrbitReferenceGradientSystematicCov);
     outDataTree->Branch("orbitReferenceAlignmentSampleShifts",
                         &outOrbitReferenceAlignmentSampleShifts);
     outDataTree->Branch("orbitReferenceAlignmentSampleCov",
@@ -591,10 +601,13 @@ void Preprocessor::processFiles(const Options &opt) const {
       outOrbitReferenceMomentumEst = *referenceMomentumEst;
       outOrbitReferenceCov.ResizeTo(*referenceCov);
       outOrbitReferenceCov = *referenceCov;
-      outOrbitReferenceBeamCov.ResizeTo(*referenceBeamCov);
-      outOrbitReferenceBeamCov = *referenceBeamCov;
+      outOrbitReferenceBeamBunchCov.ResizeTo(*referenceBeamBunchCov);
+      outOrbitReferenceBeamBunchCov = *referenceBeamBunchCov;
       outOrbitReferenceAlignmentCov.ResizeTo(*referenceAlignmentCov);
       outOrbitReferenceAlignmentCov = *referenceAlignmentCov;
+      outOrbitReferenceGradientSystematicCov.ResizeTo(
+          *referenceGradientSystematicCov);
+      outOrbitReferenceGradientSystematicCov = *referenceGradientSystematicCov;
       outOrbitReferenceAlignmentSampleShifts.clear();
       outOrbitReferenceAlignmentSampleShifts = *referenceAlignmentSampleShifts;
       outOrbitReferenceAlignmentSampleCov.ResizeTo(
