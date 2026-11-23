@@ -11,8 +11,6 @@
 #include <string>
 
 #include "Analysis/PVList.hpp"
-#include "ROI/ButterflyROI.hpp"
-#include "ROI/UnboundedROI.hpp"
 #include "TCanvas.h"
 #include "TLorentzVector.h"
 #include "TMatrixD.h"
@@ -124,36 +122,6 @@ Preprocessor::FileHandle Preprocessor::getFileHandle(
   return {file, chainOwner, tree};
 }
 
-std::map<std::size_t, std::shared_ptr<ROI>> Preprocessor::getROIs(
-    const std::string &pathToROIData, const Options &opt) const {
-  std::map<std::size_t, std::shared_ptr<ROI>> rois;
-  switch (opt.roiType) {
-    case Ellipse: {
-      throw std::runtime_error("Ellipse ROI reading is not supported yet");
-      break;
-    }
-    case Butterfly: {
-      ButterflyROIFactory factory;
-      auto butterflies = factory.buildROIForRun(pathToROIData);
-      for (std::size_t id : opt.chipIds) {
-        rois.insert({id, butterflies.at(id)});
-      }
-      break;
-    }
-    case Unbounded: {
-      for (std::size_t id : opt.chipIds) {
-        rois.insert({id, std::make_shared<UnboundedROI>()});
-      }
-      break;
-    }
-    default: {
-      throw std::runtime_error("Unknown ROI type");
-      break;
-    }
-  }
-  return rois;
-}
-
 void Preprocessor::processFiles(const Options &opt) const {
   using namespace EPICS;
 
@@ -166,8 +134,7 @@ void Preprocessor::processFiles(const Options &opt) const {
   for (const auto &[runPrefix, collection] : paths) {
     std::cout << "Processing " << runPrefix << "\n";
 
-    std::string roiPath = opt.inROIDir + "/" + runPrefix + ".csv";
-    auto rois = getROIs(roiPath, opt);
+    const auto &rois = opt.roiProvider->getROIs(runPrefix);
 
     // --------------------------------------------------
     // Initialize stats

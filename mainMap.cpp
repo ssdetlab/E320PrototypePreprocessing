@@ -1,7 +1,10 @@
+#include <filesystem>
 #include <memory>
+#include <string>
 
 #include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PreprocessorMap.hpp"
+#include "ROI/ROIProvider.hpp"
 
 int main() {
   // Initialize clustering algorithm
@@ -11,6 +14,29 @@ int main() {
   auto clusteringAlgo =
       std::make_shared<ClusteringAlgorithm>(clusteringAlgoCfg);
 
+  // Initialize ROI provider
+  ROIProvider::Config roiProviderCfg{};
+  // ROI data directory path
+  roiProviderCfg.inROIDir =
+      "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_preprocessing/"
+      "out_data/rois/local_alignment_data";
+  // ROI type
+  roiProviderCfg.roiType = ROIProvider::ROIType::Butterfly;
+  // Chip IDs of the dataset
+  roiProviderCfg.chipIds = {0, 2, 4, 6, 8};
+  // Run prefix to ROI run prefix map,
+  // every run with a ROI file uses its own ROIs
+  for (const auto &entry :
+       std::filesystem::directory_iterator(roiProviderCfg.inROIDir)) {
+    if (entry.path().extension() == ".csv") {
+      std::string runPrefix = entry.path().stem().string();
+      roiProviderCfg.roiRunMap.insert({runPrefix, runPrefix});
+    }
+  }
+  // ROIs of another run, e.g. estimated on signal and applied to background
+  // roiProviderCfg.roiRunMap.insert_or_assign("data_RunBkg", "data_RunSig");
+  auto roiProvider = std::make_shared<ROIProvider>(roiProviderCfg);
+
   Preprocessor preprocessor;
 
   Preprocessor::Options opt;
@@ -19,10 +45,6 @@ int main() {
   opt.inDataDir =
       "/home/romanurmanov/work/E320/E320Prototype/"
       "E320Prototype_dataInRootFormat/local_alignment_data/raw/sig";
-  // ROI data directory path
-  opt.inROIDir =
-      "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_preprocessing/"
-      "out_data/rois/local_alignment_data";
   // Orbit reconstruction data directory path
   opt.inOrbitDir =
       "/home/romanurmanov/work/E320/E320Prototype/E320Prototype_bpm_analysis/"
@@ -52,8 +74,6 @@ int main() {
   // Max number of StdDevs for the
   // accelerator data
   opt.nStdDevsAcc = 6;
-  // ROI type
-  opt.roiType = Preprocessor::ROIType::Butterfly;
   // Maximum number of hits
   opt.maxHits = 1e6;
   // Maximum number of hits in the ROI
@@ -61,6 +81,7 @@ int main() {
   // Exclude shuttered events flag
   opt.excludeShuttered = false;
   opt.clusteringAlgo = clusteringAlgo;
+  opt.roiProvider = roiProvider;
 
   preprocessor.processFiles(opt);
 };
