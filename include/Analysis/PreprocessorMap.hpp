@@ -189,23 +189,6 @@ class Preprocessor {
   std::map<std::size_t, std::shared_ptr<ROI>> getROIs(
       const std::string &pathToROIData, const Options &opt) const;
 
-  /// @brief perform BFS clustering on the collection of hits
-  ///
-  /// @param clusterPixels collection cluster hits
-  /// @param pivot hit to start the search from
-  /// @param pixels collection of active pixels to search the clusters in
-  void bfsClustering(std::vector<Hit> &clusterPixels, Hit &pivot,
-                     HitSet &pixels) const;
-
-  /// @brief find active pixel clusters in the collection of hits
-  ///
-  /// @param hits active pixels collection
-  /// @param maxCluterSize maximum allowed size of a pixel cluster
-  ///
-  /// @return vector of active pixel clusters
-  std::vector<Cluster> getClusters(HitSet &hits,
-                                   std::size_t maxCluterSize) const;
-
   /// @brief get accelerator state means and std devs for a run
   ///
   /// @param tree tree with the accelerator data
