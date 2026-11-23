@@ -77,7 +77,9 @@ class Preprocessor {
     ///
     /// @param prefix unique run identifier
     /// @param ids chip IDs under analysis
-    void init(const std::string &prefix, const std::set<std::size_t> &ids);
+    /// @param pvNames accelerator state PV labels
+    void init(const std::string &prefix, const std::set<std::size_t> &ids,
+              const std::vector<std::string> &pvNames);
 
     /// @brief reset the diagnostics plots
     void reset();
@@ -118,33 +120,12 @@ class Preprocessor {
     /// Filtered occupancy graphs
     std::map<int, TGraph> chipOccFilteredGrs;
 
-    /// Raw PMTs
-    TGraph gr_PMT_S20_3060_Raw;
-    TGraph gr_PMT_S20_3070_Raw;
-    TGraph gr_PMT_S20_3179_Raw;
-    TGraph gr_PMT_S20_3350_Raw;
-    TGraph gr_PMT_S20_3360_Raw;
-
-    /// Filtered PMTs
-    TGraph gr_PMT_S20_3060_Filtered;
-    TGraph gr_PMT_S20_3070_Filtered;
-    TGraph gr_PMT_S20_3179_Filtered;
-    TGraph gr_PMT_S20_3350_Filtered;
-    TGraph gr_PMT_S20_3360_Filtered;
-
-    /// Raw toroids
-    TGraph gr_TORO_LI20_1988_TMIT_PC_Raw;
-    TGraph gr_TORO_LI20_2040_TMIT_PC_Raw;
-    TGraph gr_TORO_LI20_2452_TMIT_PC_Raw;
-    TGraph gr_TORO_LI20_3163_TMIT_PC_Raw;
-    TGraph gr_TORO_LI20_3255_TMIT_PC_Raw;
-
-    /// Filtered toroids
-    TGraph gr_TORO_LI20_1988_TMIT_PC_Filtered;
-    TGraph gr_TORO_LI20_2040_TMIT_PC_Filtered;
-    TGraph gr_TORO_LI20_2452_TMIT_PC_Filtered;
-    TGraph gr_TORO_LI20_3163_TMIT_PC_Filtered;
-    TGraph gr_TORO_LI20_3255_TMIT_PC_Filtered;
+    /// Accelerator state PV labels
+    std::vector<std::string> accPvNames;
+    /// Raw accelerator state PV graphs
+    std::vector<TGraph> accRawGrs;
+    /// Filtered accelerator state PV graphs
+    std::vector<TGraph> accFilteredGrs;
   };
 
   /// @brief Run data preprocessing

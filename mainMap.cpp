@@ -4,6 +4,7 @@
 
 #include "Analysis/AcceleratorStateFilter.hpp"
 #include "Analysis/ClusteringAlgorithm.hpp"
+#include "Analysis/PVList.hpp"
 #include "Analysis/PreprocessorMap.hpp"
 #include "ROI/ROIProvider.hpp"
 
@@ -47,6 +48,29 @@ int main() {
   // Max number of StdDevs for the
   // accelerator data
   acceleratorStateFilterCfg.nStdDevs = 6;
+  // Accelerator state PVs: PV name, label, cut type,
+  // number of bins, lower and upper edge of the distribution
+  acceleratorStateFilterCfg.pvs = {
+      {pmt_s20_3060_key, "PMT_S20_3060", AcceleratorStateFilter::CutType::Upper,
+       10000, 0, 50000},
+      {pmt_s20_3070_key, "PMT_S20_3070", AcceleratorStateFilter::CutType::Upper,
+       10000, 0, 50000},
+      {pmt_s20_3179_key, "PMT_S20_3179", AcceleratorStateFilter::CutType::Upper,
+       10000, 0, 50000},
+      {pmt_s20_3350_key, "PMT_S20_3350", AcceleratorStateFilter::CutType::Upper,
+       10000, 0, 50000},
+      {pmt_s20_3360_key, "PMT_S20_3360", AcceleratorStateFilter::CutType::Upper,
+       10000, 0, 50000},
+      {toro_li20_1988_tmit_pc_key, "TORO_LI20_1988_TMIT_PC",
+       AcceleratorStateFilter::CutType::Central, 10000, -5000, 5000},
+      {toro_li20_2040_tmit_pc_key, "TORO_LI20_2040_TMIT_PC",
+       AcceleratorStateFilter::CutType::Central, 10000, -5000, 5000},
+      {toro_li20_2452_tmit_pc_key, "TORO_LI20_2452_TMIT_PC",
+       AcceleratorStateFilter::CutType::Central, 10000, -5000, 5000},
+      {toro_li20_3163_tmit_pc_key, "TORO_LI20_3163_TMIT_PC",
+       AcceleratorStateFilter::CutType::Central, 10000, -5000, 5000},
+      {toro_li20_3255_tmit_pc_key, "TORO_LI20_3255_TMIT_PC",
+       AcceleratorStateFilter::CutType::Central, 10000, -5000, 5000}};
   auto acceleratorStateFilter =
       std::make_shared<AcceleratorStateFilter>(acceleratorStateFilterCfg);
 
