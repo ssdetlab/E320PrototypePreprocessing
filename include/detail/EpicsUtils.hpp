@@ -14,7 +14,7 @@ namespace EPICS {
 /// @param bz dipole length in m
 ///
 /// @return field strength in T
-double convertEpicsDipole(double val, double theta, double bz) {
+inline double convertEpicsDipole(double val, double theta, double bz) {
   const double c_light = 2.99792458E8;  // speed of light in m/s
   const double me = 0.5109989461e6;     // electron mass in eV
   return std::sqrt(val * val - me * me) * std::sin(theta) / (c_light * bz);
@@ -26,7 +26,7 @@ double convertEpicsDipole(double val, double theta, double bz) {
 /// @param bz dipole length in m
 ///
 /// @return field strength in T
-double convertEpicsXCorrector(double val, double bz) {
+inline double convertEpicsXCorrector(double val, double bz) {
   return val / bz * 0.1;
 }
 
@@ -35,7 +35,7 @@ double convertEpicsXCorrector(double val, double bz) {
 /// @param val PV value -- kG
 ///
 /// @return field gradient in T/m
-double convertEpicsQuad(double val) {
+inline double convertEpicsQuad(double val) {
   return val * 0.1;
 }
 
@@ -46,7 +46,7 @@ double convertEpicsQuad(double val) {
 ///
 /// @return value of the PV
 
-double getPv(const detector_event *detEvent, const std::string &pvname) {
+inline double getPv(const detector_event *detEvent, const std::string &pvname) {
   try {
     return std::stod(detEvent->ev_epics_frame.pv_map.at(pvname).value);
   } catch (std::out_of_range &err) {
