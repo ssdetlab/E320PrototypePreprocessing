@@ -313,6 +313,19 @@ void Preprocessor::processFiles(const Options &opt) const {
     for (std::size_t i = collection.skip; i < nEntries; i++) {
       inTrackerTree->GetEntry(i);
 
+      // Shuttered BXs are excluded from the accelerator diagnostics
+      std::size_t epicsPID = 0;
+      try {
+        epicsPID = getPv(detEvent, epics_pid_key);
+      } catch (std::out_of_range &err) {
+        continue;
+      }
+      bool isShuttered =
+          static_cast<int>(std::round((epicsPID - 10) / 36)) % 20 == 0;
+      if (isShuttered) {
+        continue;
+      }
+
       try {
         // PMTs
         localStats.gr_PMT_S20_3060_Raw.SetPoint(
@@ -786,6 +799,17 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
   AcceleratorState accStateStdDev;
   for (std::size_t i = skip; i < tree->GetEntries(); i++) {
     tree->GetEntry(i);
+    std::size_t epicsPID = 0;
+    try {
+      epicsPID = getPv(detEvent, epics_pid_key);
+    } catch (std::out_of_range &err) {
+      continue;
+    }
+    bool isShuttered =
+        static_cast<int>(std::round((epicsPID - 10) / 36)) % 20 == 0;
+    if (isShuttered) {
+      continue;
+    }
 
     double pmt_s20_3060_val = 0;
     double pmt_s20_3070_val = 0;
@@ -951,6 +975,12 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(
     }
     std::size_t pid =
         static_cast<std::size_t>(std::round((epicsPID - 10) / 36));
+
+    // Shuttered BXs are not classified
+    bool isShuttered = pid % 20 == 0;
+    if (isShuttered) {
+      continue;
+    }
 
     double pmt_s20_3060_val = 0;
     double pmt_s20_3070_val = 0;
