@@ -17,6 +17,7 @@ struct PathCollection {
   std::string outPath = "";
   /// Number of events to skip in the beginning
   std::size_t skip = 0;
-  /// Number of events to skip in the end
+  /// Tree entry number to stop at (exclusive),
+  /// the run entries are [skip, stop)
   std::size_t stop = 0;
 };
