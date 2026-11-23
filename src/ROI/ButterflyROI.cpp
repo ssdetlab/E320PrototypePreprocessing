@@ -154,9 +154,17 @@ ButterflyROIFactory::ROIContainer ButterflyROIFactory::buildROIForRun(
     double minOcc = rawHist.GetMinimum();
     TH1D binCounts(name.c_str(), name.c_str(), maxOcc - minOcc, minOcc, maxOcc);
 
-    std::size_t nBins = rawHist.GetNbinsX() * rawHist.GetNbinsY();
-    for (std::size_t i = 1; i <= nBins; i++) {
-      binCounts.Fill(rawHist.GetBinContent(i));
+    // Global bin numbers of the in-range bins
+    // (under- and overflow bins excluded)
+    std::vector<int> bins;
+    bins.reserve(rawHist.GetNbinsX() * rawHist.GetNbinsY());
+    for (int binX = 1; binX <= rawHist.GetNbinsX(); binX++) {
+      for (int binY = 1; binY <= rawHist.GetNbinsY(); binY++) {
+        bins.push_back(rawHist.GetBin(binX, binY));
+      }
+    }
+    for (int bin : bins) {
+      binCounts.Fill(rawHist.GetBinContent(bin));
     }
     stats.rawBinCounts = binCounts;
 
@@ -177,10 +185,10 @@ ButterflyROIFactory::ROIContainer ButterflyROIFactory::buildROIForRun(
     stats.trimmedBinCounts = binCounts;
 
     if (opt.applyNoiseFilter) {
-      for (std::size_t i = 1; i <= nBins; i++) {
-        if (std::abs(rawHist.GetBinContent(i) - mean) / sigma >
+      for (int bin : bins) {
+        if (std::abs(rawHist.GetBinContent(bin) - mean) / sigma >
             opt.nStdDevsNoise) {
-          rawHist.SetBinContent(i, 0);
+          rawHist.SetBinContent(bin, 0);
         }
       }
     }
@@ -229,12 +237,13 @@ ButterflyROIFactory::ROIContainer ButterflyROIFactory::buildROIForRun(
       for (const auto &staveEv : detEvent->st_ev_buffer) {
         for (const auto &chipEv : staveEv.ch_ev_buffer) {
           for (const auto &[hitX, hitY] : chipEv.hits) {
-            if (chipEv.chip_id == 0) {
-              double x = hitX - centerX;
-              double y = hitY - centerY;
+            if (chipEv.chip_id == id) {
+              double dx = hitX - centerX;
+              double dy = hitY - centerY;
 
-              x = std::cos(theta) * x + std::sin(theta) * y;
-              y = -std::sin(theta) * x + std::cos(theta) * y;
+              // Rotate by -theta, as in ButterflyROI::isInside
+              double x = std::cos(theta) * dx + std::sin(theta) * dy;
+              double y = -std::sin(theta) * dx + std::cos(theta) * dy;
 
               x += centerX;
               y += centerY;
