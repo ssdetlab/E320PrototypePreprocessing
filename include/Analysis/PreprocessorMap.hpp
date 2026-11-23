@@ -179,20 +179,24 @@ class Preprocessor {
   ///
   /// @param tree tree with the accelerator data
   /// @param skip number of BXs to skip in the beginning
+  /// @param stop tree entry number to stop at (exclusive)
   /// @param quantileLow low quantile trim for the diagnostic distributions
   /// @param quantileHigh high quantile trim for the diagnostic distributions
   ///
   /// @return means and std devs of the accelerator diagnostics
   std::pair<AcceleratorState, AcceleratorState> getAcceleratorStateMeanStd(
-      TTree *tree, std::size_t skip, const Options &opt) const;
+      TTree *tree, std::size_t skip, std::size_t stop,
+      const Options &opt) const;
 
   /// @brief tag anomalous BXs by analysing the accelerator state
   ///
   /// @param tree tree with the accelerator data
   /// @param skip number of BXs to skip in the beginning
+  /// @param stop tree entry number to stop at (exclusive)
   /// @param nStdDevs number of the diagnostics std devs to consider a BX anomalous
   ///
   /// @return collection of "bad" BXs' tree entry numbers
   std::unordered_set<std::size_t> getBadEvents(TTree *tree, std::size_t skip,
+                                               std::size_t stop,
                                                const Options &opt) const;
 };

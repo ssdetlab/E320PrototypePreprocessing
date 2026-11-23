@@ -299,7 +299,7 @@ void Preprocessor::processFiles(const Options &opt) const {
     // --------------------------------------------------
     // Collect bad events
     std::unordered_set<std::size_t> badEvents =
-        getBadEvents(inTrackerTree, collection.skip, opt);
+        getBadEvents(inTrackerTree, collection.skip, collection.stop, opt);
 
     // Restore the event branch address, getBadEvents
     // points the branch to its own local event
@@ -627,8 +627,13 @@ void Preprocessor::processFiles(const Options &opt) const {
 
 std::pair<AcceleratorState, AcceleratorState>
 Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
+                                         std::size_t stop,
                                          const Options &opt) const {
   using namespace EPICS;
+
+  // Run entries [skip, stop)
+  std::size_t nEntries =
+      std::min(static_cast<std::size_t>(tree->GetEntries()), stop);
 
   detector_event *detEvent = nullptr;
   tree->SetBranchAddress("event", &detEvent);
@@ -659,7 +664,7 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
   TH1D toro_li20_3255_tmit_pc_hist(
       "toro_li20_3255_tmit_pc", "toro_li20_3255_tmit_pc", 10000, -5000, 5000);
 
-  for (std::size_t i = skip; i < tree->GetEntries(); i++) {
+  for (std::size_t i = skip; i < nEntries; i++) {
     tree->GetEntry(i);
     std::size_t epicsPID = 0;
     try {
@@ -797,7 +802,7 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
 
   AcceleratorState accStateMean;
   AcceleratorState accStateStdDev;
-  for (std::size_t i = skip; i < tree->GetEntries(); i++) {
+  for (std::size_t i = skip; i < nEntries; i++) {
     tree->GetEntry(i);
     std::size_t epicsPID = 0;
     try {
@@ -944,14 +949,18 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
 }
 
 std::unordered_set<std::size_t> Preprocessor::getBadEvents(
-    TTree *tree, std::size_t skip, const Options &opt) const {
+    TTree *tree, std::size_t skip, std::size_t stop, const Options &opt) const {
   using namespace EPICS;
+
+  // Run entries [skip, stop)
+  std::size_t nEntries =
+      std::min(static_cast<std::size_t>(tree->GetEntries()), stop);
 
   std::cout << "Getting bad events with AccStdDev = " << opt.nStdDevsAcc
             << "\n";
   // Get accelerator state parameters
   auto [accStateMean, accStateStdDev] =
-      getAcceleratorStateMeanStd(tree, skip, opt);
+      getAcceleratorStateMeanStd(tree, skip, stop, opt);
 
   detector_event *detEvent = nullptr;
   tree->SetBranchAddress("event", &detEvent);
@@ -964,7 +973,7 @@ std::unordered_set<std::size_t> Preprocessor::getBadEvents(
     return ((val - mean) / std > opt.nStdDevsAcc);
   };
 
-  for (std::size_t i = skip; i < tree->GetEntries(); i++) {
+  for (std::size_t i = skip; i < nEntries; i++) {
     tree->GetEntry(i);
     std::size_t epicsPID = 0;
     try {
