@@ -398,7 +398,7 @@ void Preprocessor::processFiles(const Options &opt) const {
       outDetEvent.tsEnd = detEvent->ts_end;
       outDetEvent.runNumber = detEvent->run_number;
       outDetEvent.epicsParity = isEven ? 0 : 1;
-      outDetEvent.epicsPID = std::round((epicsPID - 10) / 36) * 36 + 10;
+      outDetEvent.epicsPID = std::round((epicsPID - 10) / 36.0) * 36 + 10;
       outDetEvent.epicsDAQNumber = getPv(detEvent, epics_daq_number_key);
 
       std::vector<E320Io::StaveEvent> outStaveEvents;
