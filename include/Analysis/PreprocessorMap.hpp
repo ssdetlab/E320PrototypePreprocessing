@@ -12,7 +12,7 @@
 #include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PathCollection.hpp"
 #include "DetectorEvent.h"
-#include "ROI/ROI.hpp"
+#include "ROI/ROIProvider.hpp"
 #include "TChain.h"
 #include "TFile.h"
 #include "TGraph.h"
@@ -33,15 +33,10 @@ class Preprocessor {
   using Hit = std::pair<std::uint16_t, std::uint16_t>;
   using HitSet = std::unordered_set<Hit, PairHash>;
 
-  /// @brief supported ROI types enumeration
-  enum ROIType : int { Ellipse = 0, Butterfly = 1, Unbounded = 2 };
-
   /// @brief preprocessing options struct
   struct Options {
     /// Data directory path
     std::string inDataDir;
-    /// ROI CSV data directory path
-    std::string inROIDir;
     /// Orbit reconstruction data directory path
     std::string inOrbitDir;
     /// Data tree name
@@ -67,8 +62,6 @@ class Preprocessor {
     /// Max number of std devs for the
     /// accelerator data
     int nStdDevsAcc;
-    /// ROI type
-    ROIType roiType;
     /// Maximum number of hits
     std::size_t maxHits;
     /// Maximum number of hits in the ROI
@@ -77,6 +70,8 @@ class Preprocessor {
     bool excludeShuttered;
     /// Clustering algo
     std::shared_ptr<ClusteringAlgorithm> clusteringAlgo;
+    /// ROI provider
+    std::shared_ptr<ROIProvider> roiProvider;
   };
 
   /// @brief Output diagnostic plots struct
@@ -179,15 +174,6 @@ class Preprocessor {
   /// @return file handle for run data reading
   FileHandle getFileHandle(const std::string &treeName,
                            const std::vector<std::string> &paths) const;
-
-  /// @brief get file handle for a given ROOT tree
-  ///
-  /// @param pathToROIData path to directory with ROI CSV files
-  /// @param opt option struct
-  ///
-  /// @return chip ID to ROI map for the run
-  std::map<std::size_t, std::shared_ptr<ROI>> getROIs(
-      const std::string &pathToROIData, const Options &opt) const;
 
   /// @brief get accelerator state means and std devs for a run
   ///
