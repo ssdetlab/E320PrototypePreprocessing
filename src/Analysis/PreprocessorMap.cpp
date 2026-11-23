@@ -13,6 +13,7 @@
 #include "Analysis/PVList.hpp"
 #include "ROI/ButterflyROI.hpp"
 #include "ROI/UnboundedROI.hpp"
+#include "detail/EpicsUtils.hpp"
 #include "TCanvas.h"
 #include "TLorentzVector.h"
 #include "TMatrixD.h"
@@ -154,6 +155,8 @@ std::map<std::size_t, std::shared_ptr<ROI>> Preprocessor::getROIs(
 }
 
 void Preprocessor::processFiles(const Options &opt) const {
+  using namespace EPICS;
+
   Stats globalStats;
   globalStats.init("Total", opt.chipIds);
 
@@ -645,6 +648,8 @@ void Preprocessor::processFiles(const Options &opt) const {
 std::pair<AcceleratorState, AcceleratorState>
 Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
                                          const Options &opt) const {
+  using namespace EPICS;
+
   detector_event *detEvent = nullptr;
   tree->SetBranchAddress("event", &detEvent);
 
@@ -949,6 +954,8 @@ Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
 
 std::unordered_set<std::size_t> Preprocessor::getBadEvents(
     TTree *tree, std::size_t skip, const Options &opt) const {
+  using namespace EPICS;
+
   std::cout << "Getting bad events with AccStdDev = " << opt.nStdDevsAcc
             << "\n";
   // Get accelerator state parameters
@@ -1152,32 +1159,6 @@ std::vector<Preprocessor::Cluster> Preprocessor::getClusters(
   }
 
   return clusters;
-}
-
-double Preprocessor::convertEpicsDipole(double val, double theta,
-                                        double bz) const {
-  const double c_light = 2.99792458E8;  // speed of light in m/s
-  const double me = 0.5109989461e6;     // electron mass in eV
-
-  return std::sqrt(val * val - me * me) * std::sin(theta) / (c_light * bz);
-}
-
-double Preprocessor::convertEpicsXCorrector(double val, double bz) const {
-  return val / bz * 0.1;
-}
-
-double Preprocessor::convertEpicsQuad(double val) const {
-  return val * 0.1;
-}
-
-double Preprocessor::getPv(const detector_event *detEvent,
-                           const std::string &pvname) const {
-  try {
-    return std::stod(detEvent->ev_epics_frame.pv_map.at(pvname).value);
-  } catch (std::out_of_range &err) {
-    std::cout << "MISSING PV " << pvname << "\n";
-    throw err;
-  }
 }
 
 void Preprocessor::Stats::init(const std::string &prefix,

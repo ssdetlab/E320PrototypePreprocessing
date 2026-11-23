@@ -226,35 +226,4 @@ class Preprocessor {
   std::unordered_set<std::size_t> getBadEvents(TTree *tree, std::size_t skip,
                                                const Options &opt) const;
 
-  /// @brief convert EPICS dipole PV to T
-  ///
-  /// @param val PV value -- beam energy in eV
-  /// @param theta deflection angle in rad
-  /// @param bz dipole length in m
-  ///
-  /// @return field strength in T
-  double convertEpicsDipole(double val, double theta, double bz) const;
-
-  /// @brief convert EPICS x-corrector PV to T
-  ///
-  /// @param val PV value -- kG * m
-  /// @param bz dipole length in m
-  ///
-  /// @return field strength in T
-  double convertEpicsXCorrector(double val, double bz) const;
-
-  /// @brief convert EPICS quadrupole PV to T
-  ///
-  /// @param val PV value -- kG
-  ///
-  /// @return field gradient in T/m
-  double convertEpicsQuad(double val) const;
-
-  /// @brief extract EPICS PV value as a double
-  ///
-  /// @param detEvent detector event pointer
-  /// @param pvname name of the PV to extract
-  ///
-  /// @return value of the PV
-  double getPv(const detector_event *detEvent, const std::string &pvname) const;
 };
