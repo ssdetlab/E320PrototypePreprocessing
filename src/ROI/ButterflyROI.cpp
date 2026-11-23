@@ -222,7 +222,7 @@ ButterflyROIFactory::ROIContainer ButterflyROIFactory::buildROIForRun(
           rawHist.ProjectionY(name.c_str(), currentBin - opt.stepWidth / 2,
                               currentBin + opt.stepWidth / 2);
 
-      double x = slice->GetBinCenter(maxBinX + i * opt.stepSize);
+      double x = rawHist.GetXaxis()->GetBinCenter(currentBin);
       double y = slice->GetBinCenter(slice->GetMaximumBin());
       slopeGr.SetPoint(slopeGr.GetN(), x, y);
     }
@@ -314,6 +314,9 @@ ButterflyROIFactory::ROIContainer ButterflyROIFactory::buildROIForRun(
 
       for (const auto &staveEv : detEvent->st_ev_buffer) {
         for (const auto &chipEv : staveEv.ch_ev_buffer) {
+          if (chipEv.chip_id != id) {
+            continue;
+          }
           for (const auto &[hitX, hitY] : chipEv.hits) {
             if (roi->isInside(hitX, hitY)) {
               testHist.Fill(hitX, hitY);
