@@ -2,11 +2,9 @@
 
 #include <cmath>
 #include <cstddef>
-#include <deque>
 #include <filesystem>
 #include <iostream>
 #include <iterator>
-#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -249,6 +247,9 @@ void Preprocessor::processFiles(const Options &opt) const {
 
     // Output orbit reconstruction branches, the orbit prefix marks the
     // quantities of the reconstructed beam orbit
+    std::size_t bufSize = 32000;
+    std::size_t splitLvl = 0;
+
     TVector3 outOrbitReferencePositionEst;
     TLorentzVector outOrbitReferenceMomentumEst;
     TMatrixD outOrbitReferenceCov;
@@ -260,22 +261,26 @@ void Preprocessor::processFiles(const Options &opt) const {
     double outOrbitReferenceFitChi2Est = 0;
 
     outDataTree->Branch("orbitReferencePositionEst",
-                        &outOrbitReferencePositionEst);
+                        &outOrbitReferencePositionEst, bufSize, splitLvl);
     outDataTree->Branch("orbitReferenceMomentumEst",
-                        &outOrbitReferenceMomentumEst);
-    outDataTree->Branch("orbitReferenceCov", &outOrbitReferenceCov);
+                        &outOrbitReferenceMomentumEst, bufSize, splitLvl);
+    outDataTree->Branch("orbitReferenceCov", &outOrbitReferenceCov, bufSize,
+                        splitLvl);
     outDataTree->Branch("orbitReferenceBeamBunchCov",
-                        &outOrbitReferenceBeamBunchCov);
+                        &outOrbitReferenceBeamBunchCov, bufSize, splitLvl);
     outDataTree->Branch("orbitReferenceAlignmentCov",
-                        &outOrbitReferenceAlignmentCov);
+                        &outOrbitReferenceAlignmentCov, bufSize, splitLvl);
     outDataTree->Branch("orbitReferenceGradientSystematicCov",
-                        &outOrbitReferenceGradientSystematicCov);
+                        &outOrbitReferenceGradientSystematicCov, bufSize,
+                        splitLvl);
     outDataTree->Branch("orbitReferenceAlignmentSampleShifts",
-                        &outOrbitReferenceAlignmentSampleShifts);
+                        &outOrbitReferenceAlignmentSampleShifts, bufSize,
+                        splitLvl);
     outDataTree->Branch("orbitReferenceAlignmentSampleCov",
-                        &outOrbitReferenceAlignmentSampleCov);
+                        &outOrbitReferenceAlignmentSampleCov, bufSize,
+                        splitLvl);
     outDataTree->Branch("orbitReferenceFitChi2Est",
-                        &outOrbitReferenceFitChi2Est);
+                        &outOrbitReferenceFitChi2Est, bufSize, splitLvl);
 
     // Output magnet tree branches
     double quadTripletFocusingEnergy = 0;
