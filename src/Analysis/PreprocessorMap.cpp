@@ -297,107 +297,69 @@ void Preprocessor::processFiles(const Options &opt) const {
     outMagFieldTree->Branch("eventId", &eventId);
 
     // --------------------------------------------------
+    // Collect the accelerator data of the run BXs
+    std::size_t nEntries = std::min(
+        static_cast<std::size_t>(inTrackerTree->GetEntries()), collection.stop);
+    std::cout << "Collecting accelerator data\n";
+    std::vector<AcceleratorStateFilter::BxData> bxs;
+    for (std::size_t i = collection.skip; i < nEntries; i++) {
+      inTrackerTree->GetEntry(i);
+      bxs.push_back(opt.acceleratorStateFilter->getBxData(detEvent, i));
+    }
+
+    // --------------------------------------------------
     // Collect bad events
     std::unordered_set<std::size_t> badEvents =
-        getBadEvents(inTrackerTree, collection.skip, collection.stop, opt);
-
-    // Restore the event branch address, getBadEvents
-    // points the branch to its own local event
-    inTrackerTree->SetBranchAddress("event", &detEvent);
+        opt.acceleratorStateFilter->getBadEvents(bxs);
 
     // --------------------------------------------------
     // Fill in accelerator events
-    std::size_t nEntries = std::min(
-        static_cast<std::size_t>(inTrackerTree->GetEntries()), collection.stop);
     std::cout << "Filling in accelerator data\n";
-    for (std::size_t i = collection.skip; i < nEntries; i++) {
-      inTrackerTree->GetEntry(i);
-
+    std::vector<TGraph *> accRawGrs = {
+        &localStats.gr_PMT_S20_3060_Raw,
+        &localStats.gr_PMT_S20_3070_Raw,
+        &localStats.gr_PMT_S20_3179_Raw,
+        &localStats.gr_PMT_S20_3350_Raw,
+        &localStats.gr_PMT_S20_3360_Raw,
+        &localStats.gr_TORO_LI20_1988_TMIT_PC_Raw,
+        &localStats.gr_TORO_LI20_2040_TMIT_PC_Raw,
+        &localStats.gr_TORO_LI20_2452_TMIT_PC_Raw,
+        &localStats.gr_TORO_LI20_3163_TMIT_PC_Raw,
+        &localStats.gr_TORO_LI20_3255_TMIT_PC_Raw};
+    std::vector<TGraph *> accFilteredGrs = {
+        &localStats.gr_PMT_S20_3060_Filtered,
+        &localStats.gr_PMT_S20_3070_Filtered,
+        &localStats.gr_PMT_S20_3179_Filtered,
+        &localStats.gr_PMT_S20_3350_Filtered,
+        &localStats.gr_PMT_S20_3360_Filtered,
+        &localStats.gr_TORO_LI20_1988_TMIT_PC_Filtered,
+        &localStats.gr_TORO_LI20_2040_TMIT_PC_Filtered,
+        &localStats.gr_TORO_LI20_2452_TMIT_PC_Filtered,
+        &localStats.gr_TORO_LI20_3163_TMIT_PC_Filtered,
+        &localStats.gr_TORO_LI20_3255_TMIT_PC_Filtered};
+    for (const auto &bx : bxs) {
       // Shuttered BXs are excluded from the accelerator diagnostics
-      std::size_t epicsPID = 0;
-      try {
-        epicsPID = getPv(detEvent, epics_pid_key);
-      } catch (std::out_of_range &err) {
-        continue;
-      }
-      bool isShuttered =
-          static_cast<int>(std::round((epicsPID - 10) / 36)) % 20 == 0;
-      if (isShuttered) {
+      if (!bx.hasPid || bx.isShuttered) {
         continue;
       }
 
-      try {
-        // PMTs
-        localStats.gr_PMT_S20_3060_Raw.SetPoint(
-            localStats.gr_PMT_S20_3060_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, pmt_s20_3060_key));
-        localStats.gr_PMT_S20_3070_Raw.SetPoint(
-            localStats.gr_PMT_S20_3070_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, pmt_s20_3070_key));
-        localStats.gr_PMT_S20_3179_Raw.SetPoint(
-            localStats.gr_PMT_S20_3179_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, pmt_s20_3179_key));
-        localStats.gr_PMT_S20_3350_Raw.SetPoint(
-            localStats.gr_PMT_S20_3350_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, pmt_s20_3350_key));
-        localStats.gr_PMT_S20_3360_Raw.SetPoint(
-            localStats.gr_PMT_S20_3360_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, pmt_s20_3360_key));
-        // Toroids
-        localStats.gr_TORO_LI20_1988_TMIT_PC_Raw.SetPoint(
-            localStats.gr_TORO_LI20_1988_TMIT_PC_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, toro_li20_1988_tmit_pc_key));
-        localStats.gr_TORO_LI20_2040_TMIT_PC_Raw.SetPoint(
-            localStats.gr_TORO_LI20_2040_TMIT_PC_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, toro_li20_2040_tmit_pc_key));
-        localStats.gr_TORO_LI20_2452_TMIT_PC_Raw.SetPoint(
-            localStats.gr_TORO_LI20_2452_TMIT_PC_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, toro_li20_2452_tmit_pc_key));
-        localStats.gr_TORO_LI20_3163_TMIT_PC_Raw.SetPoint(
-            localStats.gr_TORO_LI20_3163_TMIT_PC_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, toro_li20_3163_tmit_pc_key));
-        localStats.gr_TORO_LI20_3255_TMIT_PC_Raw.SetPoint(
-            localStats.gr_TORO_LI20_3255_TMIT_PC_Raw.GetN(), detEvent->trg_n,
-            getPv(detEvent, toro_li20_3255_tmit_pc_key));
-      } catch (std::out_of_range &err) {
-        std::cout << "MISSING PVs at " << detEvent->trg_n << "\n";
+      // Raw values of the PVs read before the first missing one
+      auto values = AcceleratorStateFilter::getStateValues(bx.state);
+      for (std::size_t j = 0; j < bx.nPvs; j++) {
+        accRawGrs.at(j)->SetPoint(accRawGrs.at(j)->GetN(), bx.trgN,
+                                  values.at(j));
+      }
+      if (!bx.hasPvs) {
         continue;
       }
-      if (badEvents.contains(i)) {
+
+      if (badEvents.contains(bx.entry)) {
         continue;
       }
-      // PMTs
-      localStats.gr_PMT_S20_3060_Filtered.SetPoint(
-          localStats.gr_PMT_S20_3060_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, pmt_s20_3060_key));
-      localStats.gr_PMT_S20_3070_Filtered.SetPoint(
-          localStats.gr_PMT_S20_3070_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, pmt_s20_3070_key));
-      localStats.gr_PMT_S20_3179_Filtered.SetPoint(
-          localStats.gr_PMT_S20_3179_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, pmt_s20_3179_key));
-      localStats.gr_PMT_S20_3350_Filtered.SetPoint(
-          localStats.gr_PMT_S20_3350_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, pmt_s20_3350_key));
-      localStats.gr_PMT_S20_3360_Filtered.SetPoint(
-          localStats.gr_PMT_S20_3360_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, pmt_s20_3360_key));
-      // Toroids
-      localStats.gr_TORO_LI20_1988_TMIT_PC_Filtered.SetPoint(
-          localStats.gr_TORO_LI20_1988_TMIT_PC_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, toro_li20_1988_tmit_pc_key));
-      localStats.gr_TORO_LI20_2040_TMIT_PC_Filtered.SetPoint(
-          localStats.gr_TORO_LI20_2040_TMIT_PC_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, toro_li20_2040_tmit_pc_key));
-      localStats.gr_TORO_LI20_2452_TMIT_PC_Filtered.SetPoint(
-          localStats.gr_TORO_LI20_2452_TMIT_PC_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, toro_li20_2452_tmit_pc_key));
-      localStats.gr_TORO_LI20_3163_TMIT_PC_Filtered.SetPoint(
-          localStats.gr_TORO_LI20_3163_TMIT_PC_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, toro_li20_3163_tmit_pc_key));
-      localStats.gr_TORO_LI20_3255_TMIT_PC_Filtered.SetPoint(
-          localStats.gr_TORO_LI20_3255_TMIT_PC_Filtered.GetN(), detEvent->trg_n,
-          getPv(detEvent, toro_li20_3255_tmit_pc_key));
+      for (std::size_t j = 0; j < values.size(); j++) {
+        accFilteredGrs.at(j)->SetPoint(accFilteredGrs.at(j)->GetN(), bx.trgN,
+                                       values.at(j));
+      }
     }
 
     // --------------------------------------------------
@@ -623,472 +585,6 @@ void Preprocessor::processFiles(const Options &opt) const {
 
   std::cout << "Finished processing\n";
   globalStats.print();
-}
-
-std::pair<AcceleratorState, AcceleratorState>
-Preprocessor::getAcceleratorStateMeanStd(TTree *tree, std::size_t skip,
-                                         std::size_t stop,
-                                         const Options &opt) const {
-  using namespace EPICS;
-
-  // Run entries [skip, stop)
-  std::size_t nEntries =
-      std::min(static_cast<std::size_t>(tree->GetEntries()), stop);
-
-  detector_event *detEvent = nullptr;
-  tree->SetBranchAddress("event", &detEvent);
-
-  // PMT_S20_3060
-  TH1D pmt_s20_3060_hist("pmt_s20_3060", "pmt_s20_3060", 10000, 0, 50000);
-  // PMT_S20_3070
-  TH1D pmt_s20_3070_hist("pmt_s20_3070", "pmt_s20_3070", 10000, 0, 50000);
-  // PMT_S20_3179
-  TH1D pmt_s20_3179_hist("pmt_s20_3179", "pmt_s20_3179", 10000, 0, 50000);
-  // PMT_S20_3350
-  TH1D pmt_s20_3350_hist("pmt_s20_3350", "pmt_s20_3350", 10000, 0, 50000);
-  // PMT_S20_3360
-  TH1D pmt_s20_3360_hist("pmt_s20_3360", "pmt_s20_3360", 10000, 0, 50000);
-  // TORO:LI20:1988:TMIT_PC
-  TH1D toro_li20_1988_tmit_pc_hist(
-      "toro_li20_1988_tmit_pc", "toro_li20_1988_tmit_pc", 10000, -5000, 5000);
-  // TORO:LI20:2040:TMIT_PC
-  TH1D toro_li20_2040_tmit_pc_hist(
-      "toro_li20_2040_tmit_pc", "toro_li20_2040_tmit_pc", 10000, -5000, 5000);
-  // TORO:LI20:2452:TMIT_PC
-  TH1D toro_li20_2452_tmit_pc_hist(
-      "toro_li20_2452_tmit_pc", "toro_li20_2452_tmit_pc", 10000, -5000, 5000);
-  // TORO:LI20:3163:TMIT_PC
-  TH1D toro_li20_3163_tmit_pc_hist(
-      "toro_li20_3163_tmit_pc", "toro_li20_3163_tmit_pc", 10000, -5000, 5000);
-  // TORO:LI20:3163:TMIT_PC
-  TH1D toro_li20_3255_tmit_pc_hist(
-      "toro_li20_3255_tmit_pc", "toro_li20_3255_tmit_pc", 10000, -5000, 5000);
-
-  for (std::size_t i = skip; i < nEntries; i++) {
-    tree->GetEntry(i);
-    std::size_t epicsPID = 0;
-    try {
-      epicsPID = getPv(detEvent, epics_pid_key);
-    } catch (std::out_of_range &err) {
-      continue;
-    }
-    bool isShuttered =
-        static_cast<int>(std::round((epicsPID - 10) / 36)) % 20 == 0;
-    if (isShuttered) {
-      continue;
-    }
-
-    try {
-      // PMT_S20_3060
-      double pmt_s20_3060_val = getPv(detEvent, pmt_s20_3060_key);
-      pmt_s20_3060_hist.Fill(pmt_s20_3060_val);
-      // PMT_S20_3070
-      double pmt_s20_3070_val = getPv(detEvent, pmt_s20_3070_key);
-      pmt_s20_3070_hist.Fill(pmt_s20_3070_val);
-      // PMT_S20_3179
-      double pmt_s20_3179_val = getPv(detEvent, pmt_s20_3179_key);
-      pmt_s20_3179_hist.Fill(pmt_s20_3179_val);
-      // PMT_S20_3350
-      double pmt_s20_3350_val = getPv(detEvent, pmt_s20_3350_key);
-      pmt_s20_3350_hist.Fill(pmt_s20_3350_val);
-      // PMT_S20_3360
-      double pmt_s20_3360_val = getPv(detEvent, pmt_s20_3360_key);
-      pmt_s20_3360_hist.Fill(pmt_s20_3360_val);
-      // TORO:LI20:1988:TMIT_PC
-      double toro_li20_1988_tmit_pc_val =
-          getPv(detEvent, toro_li20_1988_tmit_pc_key);
-      toro_li20_1988_tmit_pc_hist.Fill(toro_li20_1988_tmit_pc_val);
-      // TORO:LI20:2040:TMIT_PC
-      double toro_li20_2040_tmit_pc_val =
-          getPv(detEvent, toro_li20_2040_tmit_pc_key);
-      toro_li20_2040_tmit_pc_hist.Fill(toro_li20_2040_tmit_pc_val);
-      // TORO:LI20:2452:TMIT_PC
-      double toro_li20_2452_tmit_pc_val =
-          getPv(detEvent, toro_li20_2452_tmit_pc_key);
-      toro_li20_2452_tmit_pc_hist.Fill(toro_li20_2452_tmit_pc_val);
-      // TORO:LI20:3163:TMIT_PC
-      double toro_li20_3163_tmit_pc_val =
-          getPv(detEvent, toro_li20_3163_tmit_pc_key);
-      toro_li20_3163_tmit_pc_hist.Fill(toro_li20_3163_tmit_pc_val);
-      // TORO:LI20:3255:TMIT_PC
-      double toro_li20_3255_tmit_pc_val =
-          getPv(detEvent, toro_li20_3255_tmit_pc_key);
-      toro_li20_3255_tmit_pc_hist.Fill(toro_li20_3255_tmit_pc_val);
-    } catch (std::out_of_range &err) {
-      std::cout << "MISSING PVs at " << detEvent->trg_n << "\n";
-      continue;
-    }
-  }
-
-  AcceleratorState accStateMin;
-  AcceleratorState accStateMax;
-  double quantilePos[2] = {opt.noiseQuantileLowAcc, opt.noiseQuantileHighAcc};
-
-  double pmt_s20_3060_qs[2];
-  pmt_s20_3060_hist.GetQuantiles(2, pmt_s20_3060_qs, quantilePos);
-  accStateMin.pmt_s20_3060 = pmt_s20_3060_qs[0];
-  accStateMax.pmt_s20_3060 = pmt_s20_3060_qs[1];
-
-  double pmt_s20_3070_qs[2];
-  pmt_s20_3070_hist.GetQuantiles(2, pmt_s20_3070_qs, quantilePos);
-  accStateMin.pmt_s20_3070 = pmt_s20_3070_qs[0];
-  accStateMax.pmt_s20_3070 = pmt_s20_3070_qs[1];
-
-  double pmt_s20_3179_qs[2];
-  pmt_s20_3179_hist.GetQuantiles(2, pmt_s20_3179_qs, quantilePos);
-  accStateMin.pmt_s20_3179 = pmt_s20_3179_qs[0];
-  accStateMax.pmt_s20_3179 = pmt_s20_3179_qs[1];
-
-  double pmt_s20_3350_qs[2];
-  pmt_s20_3350_hist.GetQuantiles(2, pmt_s20_3350_qs, quantilePos);
-  accStateMin.pmt_s20_3350 = pmt_s20_3350_qs[0];
-  accStateMax.pmt_s20_3350 = pmt_s20_3350_qs[1];
-
-  double pmt_s20_3360_qs[2];
-  pmt_s20_3360_hist.GetQuantiles(2, pmt_s20_3360_qs, quantilePos);
-  accStateMin.pmt_s20_3360 = pmt_s20_3360_qs[0];
-  accStateMax.pmt_s20_3360 = pmt_s20_3360_qs[1];
-
-  double toro_li20_1988_tmit_pc_qs[2];
-  toro_li20_1988_tmit_pc_hist.GetQuantiles(2, toro_li20_1988_tmit_pc_qs,
-                                           quantilePos);
-  accStateMin.toro_li20_1988_tmit_pc = toro_li20_1988_tmit_pc_qs[0];
-  accStateMax.toro_li20_1988_tmit_pc = toro_li20_1988_tmit_pc_qs[1];
-
-  double toro_li20_2040_tmit_pc_qs[2];
-  toro_li20_2040_tmit_pc_hist.GetQuantiles(2, toro_li20_2040_tmit_pc_qs,
-                                           quantilePos);
-  accStateMin.toro_li20_2040_tmit_pc = toro_li20_2040_tmit_pc_qs[0];
-  accStateMax.toro_li20_2040_tmit_pc = toro_li20_2040_tmit_pc_qs[1];
-
-  double toro_li20_2452_tmit_pc_qs[2];
-  toro_li20_2452_tmit_pc_hist.GetQuantiles(2, toro_li20_2452_tmit_pc_qs,
-                                           quantilePos);
-  accStateMin.toro_li20_2452_tmit_pc = toro_li20_2452_tmit_pc_qs[0];
-  accStateMax.toro_li20_2452_tmit_pc = toro_li20_2452_tmit_pc_qs[1];
-
-  double toro_li20_3163_tmit_pc_qs[2];
-  toro_li20_3163_tmit_pc_hist.GetQuantiles(2, toro_li20_3163_tmit_pc_qs,
-                                           quantilePos);
-  accStateMin.toro_li20_3163_tmit_pc = toro_li20_3163_tmit_pc_qs[0];
-  accStateMax.toro_li20_3163_tmit_pc = toro_li20_3163_tmit_pc_qs[1];
-
-  double toro_li20_3255_tmit_pc_qs[2];
-  toro_li20_3255_tmit_pc_hist.GetQuantiles(2, toro_li20_3255_tmit_pc_qs,
-                                           quantilePos);
-  accStateMin.toro_li20_3255_tmit_pc = toro_li20_3255_tmit_pc_qs[0];
-  accStateMax.toro_li20_3255_tmit_pc = toro_li20_3255_tmit_pc_qs[1];
-
-  // PMT_S20_3060
-  pmt_s20_3060_hist.Reset();
-  // PMT_S20_3070
-  pmt_s20_3070_hist.Reset();
-  // PMT_S20_3179
-  pmt_s20_3179_hist.Reset();
-  // PMT_S20_3350
-  pmt_s20_3350_hist.Reset();
-  // PMT_S20_3360
-  pmt_s20_3360_hist.Reset();
-  // TORO:LI20:1988:TMIT_PC
-  toro_li20_1988_tmit_pc_hist.Reset();
-  // TORO:LI20:2040:TMIT_PC
-  toro_li20_2040_tmit_pc_hist.Reset();
-  // TORO:LI20:2452:TMIT_PC
-  toro_li20_2452_tmit_pc_hist.Reset();
-  // TORO:LI20:3163:TMIT_PC
-  toro_li20_3163_tmit_pc_hist.Reset();
-  // TORO:LI20:3255:TMIT_PC
-  toro_li20_3255_tmit_pc_hist.Reset();
-
-  AcceleratorState accStateMean;
-  AcceleratorState accStateStdDev;
-  for (std::size_t i = skip; i < nEntries; i++) {
-    tree->GetEntry(i);
-    std::size_t epicsPID = 0;
-    try {
-      epicsPID = getPv(detEvent, epics_pid_key);
-    } catch (std::out_of_range &err) {
-      continue;
-    }
-    bool isShuttered =
-        static_cast<int>(std::round((epicsPID - 10) / 36)) % 20 == 0;
-    if (isShuttered) {
-      continue;
-    }
-
-    double pmt_s20_3060_val = 0;
-    double pmt_s20_3070_val = 0;
-    double pmt_s20_3179_val = 0;
-    double pmt_s20_3350_val = 0;
-    double pmt_s20_3360_val = 0;
-
-    double toro_li20_1988_tmit_pc_val = 0;
-    double toro_li20_2040_tmit_pc_val = 0;
-    double toro_li20_2452_tmit_pc_val = 0;
-    double toro_li20_3163_tmit_pc_val = 0;
-    double toro_li20_3255_tmit_pc_val = 0;
-    try {
-      pmt_s20_3060_val = getPv(detEvent, pmt_s20_3060_key);
-      pmt_s20_3070_val = getPv(detEvent, pmt_s20_3070_key);
-      pmt_s20_3179_val = getPv(detEvent, pmt_s20_3179_key);
-      pmt_s20_3350_val = getPv(detEvent, pmt_s20_3350_key);
-      pmt_s20_3360_val = getPv(detEvent, pmt_s20_3360_key);
-
-      toro_li20_1988_tmit_pc_val = getPv(detEvent, toro_li20_1988_tmit_pc_key);
-      toro_li20_2040_tmit_pc_val = getPv(detEvent, toro_li20_2040_tmit_pc_key);
-      toro_li20_2452_tmit_pc_val = getPv(detEvent, toro_li20_2452_tmit_pc_key);
-      toro_li20_3163_tmit_pc_val = getPv(detEvent, toro_li20_3163_tmit_pc_key);
-      toro_li20_3255_tmit_pc_val = getPv(detEvent, toro_li20_3255_tmit_pc_key);
-    } catch (std::out_of_range &err) {
-      std::cout << "MISSING PVs at " << detEvent->trg_n << "\n";
-      continue;
-    }
-
-    if (pmt_s20_3060_val < accStateMin.pmt_s20_3060 ||
-        pmt_s20_3060_val > accStateMax.pmt_s20_3060) {
-      continue;
-    }
-    if (pmt_s20_3070_val < accStateMin.pmt_s20_3070 ||
-        pmt_s20_3070_val > accStateMax.pmt_s20_3070) {
-      continue;
-    }
-    if (pmt_s20_3179_val < accStateMin.pmt_s20_3179 ||
-        pmt_s20_3179_val > accStateMax.pmt_s20_3179) {
-      continue;
-    }
-    if (pmt_s20_3350_val < accStateMin.pmt_s20_3350 ||
-        pmt_s20_3350_val > accStateMax.pmt_s20_3350) {
-      continue;
-    }
-    if (pmt_s20_3360_val < accStateMin.pmt_s20_3360 ||
-        pmt_s20_3360_val > accStateMax.pmt_s20_3360) {
-      continue;
-    }
-
-    if (toro_li20_1988_tmit_pc_val < accStateMin.toro_li20_1988_tmit_pc ||
-        toro_li20_1988_tmit_pc_val > accStateMax.toro_li20_1988_tmit_pc) {
-      continue;
-    }
-    if (toro_li20_2040_tmit_pc_val < accStateMin.toro_li20_2040_tmit_pc ||
-        toro_li20_2040_tmit_pc_val > accStateMax.toro_li20_2040_tmit_pc) {
-      continue;
-    }
-    if (toro_li20_2452_tmit_pc_val < accStateMin.toro_li20_2452_tmit_pc ||
-        toro_li20_2452_tmit_pc_val > accStateMax.toro_li20_2452_tmit_pc) {
-      continue;
-    }
-    if (toro_li20_3163_tmit_pc_val < accStateMin.toro_li20_3163_tmit_pc ||
-        toro_li20_3163_tmit_pc_val > accStateMax.toro_li20_3163_tmit_pc) {
-      continue;
-    }
-    if (toro_li20_3255_tmit_pc_val < accStateMin.toro_li20_3255_tmit_pc ||
-        toro_li20_3255_tmit_pc_val > accStateMax.toro_li20_3255_tmit_pc) {
-      continue;
-    }
-
-    // PMT_S20_3060
-    pmt_s20_3060_hist.Fill(pmt_s20_3060_val);
-    // PMT_S20_3070
-    pmt_s20_3070_hist.Fill(pmt_s20_3070_val);
-    // PMT_S20_3179
-    pmt_s20_3179_hist.Fill(pmt_s20_3179_val);
-    // PMT_S20_3350
-    pmt_s20_3350_hist.Fill(pmt_s20_3350_val);
-    // PMT_S20_3360
-    pmt_s20_3360_hist.Fill(pmt_s20_3360_val);
-    // TORO:LI20:1988:TMIT_PC
-    toro_li20_1988_tmit_pc_hist.Fill(toro_li20_1988_tmit_pc_val);
-    // TORO:LI20:2040:TMIT_PC
-    toro_li20_2040_tmit_pc_hist.Fill(toro_li20_2040_tmit_pc_val);
-    // TORO:LI20:2452:TMIT_PC
-    toro_li20_2452_tmit_pc_hist.Fill(toro_li20_2452_tmit_pc_val);
-    // TORO:LI20:3163:TMIT_PC
-    toro_li20_3163_tmit_pc_hist.Fill(toro_li20_3163_tmit_pc_val);
-    // TORO:LI20:3255:TMIT_PC
-    toro_li20_3255_tmit_pc_hist.Fill(toro_li20_3255_tmit_pc_val);
-  }
-
-  // PMT_S20_3060
-  accStateMean.pmt_s20_3060 = pmt_s20_3060_hist.GetMean();
-  accStateStdDev.pmt_s20_3060 = pmt_s20_3060_hist.GetStdDev();
-  // PMT_S20_3070
-  accStateMean.pmt_s20_3070 = pmt_s20_3070_hist.GetMean();
-  accStateStdDev.pmt_s20_3070 = pmt_s20_3070_hist.GetStdDev();
-  // PMT_S20_3179
-  accStateMean.pmt_s20_3179 = pmt_s20_3179_hist.GetMean();
-  accStateStdDev.pmt_s20_3179 = pmt_s20_3179_hist.GetStdDev();
-  // PMT_S20_3350
-  accStateMean.pmt_s20_3350 = pmt_s20_3350_hist.GetMean();
-  accStateStdDev.pmt_s20_3350 = pmt_s20_3350_hist.GetStdDev();
-  // PMT_S20_3360
-  accStateMean.pmt_s20_3360 = pmt_s20_3360_hist.GetMean();
-  accStateStdDev.pmt_s20_3360 = pmt_s20_3360_hist.GetStdDev();
-
-  // TORO:LI20:1988:TMIT_PC
-  accStateMean.toro_li20_1988_tmit_pc = toro_li20_1988_tmit_pc_hist.GetMean();
-  accStateStdDev.toro_li20_1988_tmit_pc =
-      toro_li20_1988_tmit_pc_hist.GetStdDev();
-  // TORO:LI20:2040:TMIT_PC
-  accStateMean.toro_li20_2040_tmit_pc = toro_li20_2040_tmit_pc_hist.GetMean();
-  accStateStdDev.toro_li20_2040_tmit_pc =
-      toro_li20_2040_tmit_pc_hist.GetStdDev();
-  // TORO:LI20:2452:TMIT_PC
-  accStateMean.toro_li20_2452_tmit_pc = toro_li20_2452_tmit_pc_hist.GetMean();
-  accStateStdDev.toro_li20_2452_tmit_pc =
-      toro_li20_2452_tmit_pc_hist.GetStdDev();
-  // TORO:LI20:3163:TMIT_PC
-  accStateMean.toro_li20_3163_tmit_pc = toro_li20_3163_tmit_pc_hist.GetMean();
-  accStateStdDev.toro_li20_3163_tmit_pc =
-      toro_li20_3163_tmit_pc_hist.GetStdDev();
-  // TORO:LI20:3255:TMIT_PC
-  accStateMean.toro_li20_3255_tmit_pc = toro_li20_3255_tmit_pc_hist.GetMean();
-  accStateStdDev.toro_li20_3255_tmit_pc =
-      toro_li20_3255_tmit_pc_hist.GetStdDev();
-
-  return {accStateMean, accStateStdDev};
-}
-
-std::unordered_set<std::size_t> Preprocessor::getBadEvents(
-    TTree *tree, std::size_t skip, std::size_t stop, const Options &opt) const {
-  using namespace EPICS;
-
-  // Run entries [skip, stop)
-  std::size_t nEntries =
-      std::min(static_cast<std::size_t>(tree->GetEntries()), stop);
-
-  std::cout << "Getting bad events with AccStdDev = " << opt.nStdDevsAcc
-            << "\n";
-  // Get accelerator state parameters
-  auto [accStateMean, accStateStdDev] =
-      getAcceleratorStateMeanStd(tree, skip, stop, opt);
-
-  detector_event *detEvent = nullptr;
-  tree->SetBranchAddress("event", &detEvent);
-
-  std::unordered_set<std::size_t> badEvents;
-  auto isBadCentral = [&opt](double mean, double std, double val) {
-    return (std::abs(mean - val) / std > opt.nStdDevsAcc);
-  };
-  auto isBadUpper = [&opt](double mean, double std, double val) {
-    return ((val - mean) / std > opt.nStdDevsAcc);
-  };
-
-  for (std::size_t i = skip; i < nEntries; i++) {
-    tree->GetEntry(i);
-    std::size_t epicsPID = 0;
-    try {
-      epicsPID = getPv(detEvent, epics_pid_key);
-    } catch (std::out_of_range &err) {
-      badEvents.insert(i);
-      continue;
-    }
-    std::size_t pid =
-        static_cast<std::size_t>(std::round((epicsPID - 10) / 36));
-
-    // Shuttered BXs are not classified
-    bool isShuttered = pid % 20 == 0;
-    if (isShuttered) {
-      continue;
-    }
-
-    double pmt_s20_3060_val = 0;
-    double pmt_s20_3070_val = 0;
-    double pmt_s20_3179_val = 0;
-    double pmt_s20_3350_val = 0;
-    double pmt_s20_3360_val = 0;
-
-    double toro_li20_1988_tmit_pc_val = 0;
-    double toro_li20_2040_tmit_pc_val = 0;
-    double toro_li20_2452_tmit_pc_val = 0;
-    double toro_li20_3163_tmit_pc_val = 0;
-    double toro_li20_3255_tmit_pc_val = 0;
-    try {
-      pmt_s20_3060_val = getPv(detEvent, pmt_s20_3060_key);
-      pmt_s20_3070_val = getPv(detEvent, pmt_s20_3070_key);
-      pmt_s20_3179_val = getPv(detEvent, pmt_s20_3179_key);
-      pmt_s20_3350_val = getPv(detEvent, pmt_s20_3350_key);
-      pmt_s20_3360_val = getPv(detEvent, pmt_s20_3360_key);
-
-      toro_li20_1988_tmit_pc_val = getPv(detEvent, toro_li20_1988_tmit_pc_key);
-      toro_li20_2040_tmit_pc_val = getPv(detEvent, toro_li20_2040_tmit_pc_key);
-      toro_li20_2452_tmit_pc_val = getPv(detEvent, toro_li20_2452_tmit_pc_key);
-      toro_li20_3163_tmit_pc_val = getPv(detEvent, toro_li20_3163_tmit_pc_key);
-      toro_li20_3255_tmit_pc_val = getPv(detEvent, toro_li20_3255_tmit_pc_key);
-    } catch (std::out_of_range &err) {
-      std::cout << "MISSING PVs at " << detEvent->trg_n << "\n";
-      badEvents.insert(i);
-      continue;
-    }
-
-    // PMT_S20_3060
-    if (isBadUpper(accStateMean.pmt_s20_3060, accStateStdDev.pmt_s20_3060,
-                   pmt_s20_3060_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // PMT_S20_3070
-    if (isBadUpper(accStateMean.pmt_s20_3070, accStateStdDev.pmt_s20_3070,
-                   pmt_s20_3070_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // PMT_S20_3179
-    if (isBadUpper(accStateMean.pmt_s20_3179, accStateStdDev.pmt_s20_3179,
-                   pmt_s20_3179_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // PMT_S20_3350
-    if (isBadUpper(accStateMean.pmt_s20_3350, accStateStdDev.pmt_s20_3350,
-                   pmt_s20_3350_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // PMT_S20_3360
-    if (isBadUpper(accStateMean.pmt_s20_3360, accStateStdDev.pmt_s20_3360,
-                   pmt_s20_3360_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // TORO:LI20:1988:TMIT_PC
-    if (isBadCentral(accStateMean.toro_li20_1988_tmit_pc,
-                     accStateStdDev.toro_li20_1988_tmit_pc,
-                     toro_li20_1988_tmit_pc_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // TORO:LI20:2040:TMIT_PC
-    if (isBadCentral(accStateMean.toro_li20_2040_tmit_pc,
-                     accStateStdDev.toro_li20_2040_tmit_pc,
-                     toro_li20_2040_tmit_pc_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // TORO:LI20:2452:TMIT_PC
-    if (isBadCentral(accStateMean.toro_li20_2452_tmit_pc,
-                     accStateStdDev.toro_li20_2452_tmit_pc,
-                     toro_li20_2452_tmit_pc_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // TORO:LI20:3163:TMIT_PC
-    if (isBadCentral(accStateMean.toro_li20_3163_tmit_pc,
-                     accStateStdDev.toro_li20_3163_tmit_pc,
-                     toro_li20_3163_tmit_pc_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-    // TORO:LI20:3255:TMIT_PC
-    if (isBadCentral(accStateMean.toro_li20_3255_tmit_pc,
-                     accStateStdDev.toro_li20_3255_tmit_pc,
-                     toro_li20_3255_tmit_pc_val)) {
-      badEvents.insert(i);
-      continue;
-    }
-  }
-  std::cout << "Found bad events " << badEvents.size() << "\n";
-  std::cout << "\n\n\n\n";
-  return badEvents;
 }
 
 void Preprocessor::Stats::init(const std::string &prefix,

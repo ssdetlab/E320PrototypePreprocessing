@@ -8,6 +8,7 @@ elseif(NOT ${ISMARCH2026} EQUAL -1)
       PRIVATE
       PreprocessorMap.cpp
       ClusteringAlgorithm.cpp
+      AcceleratorStateFilter.cpp
   )
 endif()
 

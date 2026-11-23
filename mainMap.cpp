@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 
+#include "Analysis/AcceleratorStateFilter.hpp"
 #include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PreprocessorMap.hpp"
 #include "ROI/ROIProvider.hpp"
@@ -37,6 +38,18 @@ int main() {
   // roiProviderCfg.roiRunMap.insert_or_assign("data_RunBkg", "data_RunSig");
   auto roiProvider = std::make_shared<ROIProvider>(roiProviderCfg);
 
+  // Initialize accelerator state filter
+  AcceleratorStateFilter::Config acceleratorStateFilterCfg{};
+  // Accelerator data noise low quantile
+  acceleratorStateFilterCfg.noiseQuantileLow = 0.1;
+  // Accelerator data noise high quantile
+  acceleratorStateFilterCfg.noiseQuantileHigh = 0.9;
+  // Max number of StdDevs for the
+  // accelerator data
+  acceleratorStateFilterCfg.nStdDevs = 6;
+  auto acceleratorStateFilter =
+      std::make_shared<AcceleratorStateFilter>(acceleratorStateFilterCfg);
+
   Preprocessor preprocessor;
 
   Preprocessor::Options opt;
@@ -67,13 +80,6 @@ int main() {
   opt.dipoleLength = 0.9144;       // in meters
   opt.xCorrectorLength = 0.23368;  // in meters
   opt.deflectionAngle = 0.006;     // in rad
-  /// Accelerator data noise low quantile
-  opt.noiseQuantileLowAcc = 0.1;
-  /// Accelerator data noise high quantile
-  opt.noiseQuantileHighAcc = 0.9;
-  // Max number of StdDevs for the
-  // accelerator data
-  opt.nStdDevsAcc = 6;
   // Maximum number of hits
   opt.maxHits = 1e6;
   // Maximum number of hits in the ROI
@@ -82,6 +88,7 @@ int main() {
   opt.excludeShuttered = false;
   opt.clusteringAlgo = clusteringAlgo;
   opt.roiProvider = roiProvider;
+  opt.acceleratorStateFilter = acceleratorStateFilter;
 
   preprocessor.processFiles(opt);
 };

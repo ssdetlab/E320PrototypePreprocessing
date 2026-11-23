@@ -8,7 +8,7 @@
 
 #include <Eigen/Eigen>
 
-#include "AcceleratorState.hpp"
+#include "Analysis/AcceleratorStateFilter.hpp"
 #include "Analysis/ClusteringAlgorithm.hpp"
 #include "Analysis/PathCollection.hpp"
 #include "DetectorEvent.h"
@@ -55,13 +55,6 @@ class Preprocessor {
     double dipoleLength;      /// in meters
     double xCorrectorLength;  /// in meters
     double deflectionAngle;   /// in rad
-    /// Accelerator data noise low quantile
-    double noiseQuantileLowAcc;
-    /// Accelerator data noise high quantile
-    double noiseQuantileHighAcc;
-    /// Max number of std devs for the
-    /// accelerator data
-    int nStdDevsAcc;
     /// Maximum number of hits
     std::size_t maxHits;
     /// Maximum number of hits in the ROI
@@ -72,6 +65,8 @@ class Preprocessor {
     std::shared_ptr<ClusteringAlgorithm> clusteringAlgo;
     /// ROI provider
     std::shared_ptr<ROIProvider> roiProvider;
+    /// Accelerator state filter
+    std::shared_ptr<AcceleratorStateFilter> acceleratorStateFilter;
   };
 
   /// @brief Output diagnostic plots struct
@@ -174,29 +169,4 @@ class Preprocessor {
   /// @return file handle for run data reading
   FileHandle getFileHandle(const std::string &treeName,
                            const std::vector<std::string> &paths) const;
-
-  /// @brief get accelerator state means and std devs for a run
-  ///
-  /// @param tree tree with the accelerator data
-  /// @param skip number of BXs to skip in the beginning
-  /// @param stop tree entry number to stop at (exclusive)
-  /// @param quantileLow low quantile trim for the diagnostic distributions
-  /// @param quantileHigh high quantile trim for the diagnostic distributions
-  ///
-  /// @return means and std devs of the accelerator diagnostics
-  std::pair<AcceleratorState, AcceleratorState> getAcceleratorStateMeanStd(
-      TTree *tree, std::size_t skip, std::size_t stop,
-      const Options &opt) const;
-
-  /// @brief tag anomalous BXs by analysing the accelerator state
-  ///
-  /// @param tree tree with the accelerator data
-  /// @param skip number of BXs to skip in the beginning
-  /// @param stop tree entry number to stop at (exclusive)
-  /// @param nStdDevs number of the diagnostics std devs to consider a BX anomalous
-  ///
-  /// @return collection of "bad" BXs' tree entry numbers
-  std::unordered_set<std::size_t> getBadEvents(TTree *tree, std::size_t skip,
-                                               std::size_t stop,
-                                               const Options &opt) const;
 };
