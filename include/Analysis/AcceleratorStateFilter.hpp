@@ -2,16 +2,35 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "AcceleratorState.hpp"
 #include "DetectorEvent.h"
 
 /// @brief algorithm tagging anomalous BXs by analysing the accelerator state
 class AcceleratorStateFilter {
  public:
+  /// @brief supported PV cut types enumeration
+  enum CutType : int { Upper = 0, Central = 1 };
+
+  /// @brief accelerator state PV configuration
+  struct PvConfig {
+    /// PV name in the EPICS frame
+    std::string key;
+    /// Label of the PV in the histograms and diagnostic plots
+    std::string name;
+    /// Cut applied to the PV
+    CutType cutType;
+    /// Number of bins of the PV distribution
+    int nBins;
+    /// Lower edge of the PV distribution
+    double low;
+    /// Upper edge of the PV distribution
+    double high;
+  };
+
   /// @brief accelerator data of a BX
   struct BxData {
     /// Tree entry number
@@ -22,13 +41,11 @@ class AcceleratorStateFilter {
     bool hasPid = false;
     /// Shuttered BX flag
     bool isShuttered = false;
-    /// Number of the accelerator state PVs read,
-    /// in the reading order up to the first missing one
-    std::size_t nPvs = 0;
+    /// Values of the accelerator state PVs, in the
+    /// configuration order up to the first missing one
+    std::vector<double> values;
     /// All accelerator state PVs presence flag
     bool hasPvs = false;
-    /// Accelerator state
-    AcceleratorState state;
   };
 
   /// @brief Nested configuration struct
@@ -40,6 +57,8 @@ class AcceleratorStateFilter {
     /// Max number of std devs for the
     /// accelerator data
     int nStdDevs;
+    /// Accelerator state PVs, read and cut in this order
+    std::vector<PvConfig> pvs;
   };
 
   AcceleratorStateFilter() = delete;
@@ -65,12 +84,10 @@ class AcceleratorStateFilter {
   std::unordered_set<std::size_t> getBadEvents(
       const std::vector<BxData> &bxs) const;
 
-  /// @brief Get the accelerator state values in the PV reading order
+  /// @brief Get the accelerator state PV configurations
   ///
-  /// @param state accelerator state
-  ///
-  /// @return accelerator state values
-  static std::vector<double> getStateValues(const AcceleratorState &state);
+  /// @return PV configurations in the reading order
+  const std::vector<PvConfig> &getPvs() const { return m_cfg.pvs; }
 
  private:
   /// Configuration
@@ -80,7 +97,7 @@ class AcceleratorStateFilter {
   ///
   /// @param bxs accelerator data of the run BXs
   ///
-  /// @return means and std devs of the accelerator diagnostics
-  std::pair<AcceleratorState, AcceleratorState> getAcceleratorStateMeanStd(
-      const std::vector<BxData> &bxs) const;
+  /// @return means and std devs of the PVs in the configuration order
+  std::pair<std::vector<double>, std::vector<double>>
+  getAcceleratorStateMeanStd(const std::vector<BxData> &bxs) const;
 };

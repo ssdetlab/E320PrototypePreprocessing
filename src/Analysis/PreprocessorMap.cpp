@@ -125,8 +125,14 @@ Preprocessor::FileHandle Preprocessor::getFileHandle(
 void Preprocessor::processFiles(const Options &opt) const {
   using namespace EPICS;
 
+  // Accelerator state PV labels
+  std::vector<std::string> accPvNames;
+  for (const auto &pv : opt.acceleratorStateFilter->getPvs()) {
+    accPvNames.push_back(pv.name);
+  }
+
   Stats globalStats;
-  globalStats.init("Total", opt.chipIds);
+  globalStats.init("Total", opt.chipIds, accPvNames);
 
   auto paths = collectDataPaths(opt);
 
@@ -139,7 +145,7 @@ void Preprocessor::processFiles(const Options &opt) const {
     // --------------------------------------------------
     // Initialize stats
     Stats localStats;
-    localStats.init(runPrefix, opt.chipIds);
+    localStats.init(runPrefix, opt.chipIds, accPvNames);
 
     // --------------------------------------------------
     // Get tracker data tree
@@ -315,28 +321,6 @@ void Preprocessor::processFiles(const Options &opt) const {
     // --------------------------------------------------
     // Fill in accelerator events
     std::cout << "Filling in accelerator data\n";
-    std::vector<TGraph *> accRawGrs = {
-        &localStats.gr_PMT_S20_3060_Raw,
-        &localStats.gr_PMT_S20_3070_Raw,
-        &localStats.gr_PMT_S20_3179_Raw,
-        &localStats.gr_PMT_S20_3350_Raw,
-        &localStats.gr_PMT_S20_3360_Raw,
-        &localStats.gr_TORO_LI20_1988_TMIT_PC_Raw,
-        &localStats.gr_TORO_LI20_2040_TMIT_PC_Raw,
-        &localStats.gr_TORO_LI20_2452_TMIT_PC_Raw,
-        &localStats.gr_TORO_LI20_3163_TMIT_PC_Raw,
-        &localStats.gr_TORO_LI20_3255_TMIT_PC_Raw};
-    std::vector<TGraph *> accFilteredGrs = {
-        &localStats.gr_PMT_S20_3060_Filtered,
-        &localStats.gr_PMT_S20_3070_Filtered,
-        &localStats.gr_PMT_S20_3179_Filtered,
-        &localStats.gr_PMT_S20_3350_Filtered,
-        &localStats.gr_PMT_S20_3360_Filtered,
-        &localStats.gr_TORO_LI20_1988_TMIT_PC_Filtered,
-        &localStats.gr_TORO_LI20_2040_TMIT_PC_Filtered,
-        &localStats.gr_TORO_LI20_2452_TMIT_PC_Filtered,
-        &localStats.gr_TORO_LI20_3163_TMIT_PC_Filtered,
-        &localStats.gr_TORO_LI20_3255_TMIT_PC_Filtered};
     for (const auto &bx : bxs) {
       // Shuttered BXs are excluded from the accelerator diagnostics
       if (!bx.hasPid || bx.isShuttered) {
@@ -344,10 +328,9 @@ void Preprocessor::processFiles(const Options &opt) const {
       }
 
       // Raw values of the PVs read before the first missing one
-      auto values = AcceleratorStateFilter::getStateValues(bx.state);
-      for (std::size_t j = 0; j < bx.nPvs; j++) {
-        accRawGrs.at(j)->SetPoint(accRawGrs.at(j)->GetN(), bx.trgN,
-                                  values.at(j));
+      for (std::size_t j = 0; j < bx.values.size(); j++) {
+        auto &gr = localStats.accRawGrs.at(j);
+        gr.SetPoint(gr.GetN(), bx.trgN, bx.values.at(j));
       }
       if (!bx.hasPvs) {
         continue;
@@ -356,9 +339,9 @@ void Preprocessor::processFiles(const Options &opt) const {
       if (badEvents.contains(bx.entry)) {
         continue;
       }
-      for (std::size_t j = 0; j < values.size(); j++) {
-        accFilteredGrs.at(j)->SetPoint(accFilteredGrs.at(j)->GetN(), bx.trgN,
-                                       values.at(j));
+      for (std::size_t j = 0; j < bx.values.size(); j++) {
+        auto &gr = localStats.accFilteredGrs.at(j);
+        gr.SetPoint(gr.GetN(), bx.trgN, bx.values.at(j));
       }
     }
 
@@ -588,9 +571,11 @@ void Preprocessor::processFiles(const Options &opt) const {
 }
 
 void Preprocessor::Stats::init(const std::string &prefix,
-                               const std::set<std::size_t> &ids) {
+                               const std::set<std::size_t> &ids,
+                               const std::vector<std::string> &pvNames) {
   runPrefix = prefix;
   chipIds = ids;
+  accPvNames = pvNames;
 
   std::string nameEventSplit = runPrefix + "EventSplit";
   eventCategotyHist =
@@ -626,30 +611,9 @@ void Preprocessor::Stats::init(const std::string &prefix,
     chipOccFilteredGrs.insert({id, TGraph()});
   }
 
-  // Raw PMTs
-  gr_PMT_S20_3060_Raw = TGraph();
-  gr_PMT_S20_3070_Raw = TGraph();
-  gr_PMT_S20_3179_Raw = TGraph();
-  gr_PMT_S20_3350_Raw = TGraph();
-  gr_PMT_S20_3360_Raw = TGraph();
-  // Filtered PMTs
-  gr_PMT_S20_3060_Filtered = TGraph();
-  gr_PMT_S20_3070_Filtered = TGraph();
-  gr_PMT_S20_3179_Filtered = TGraph();
-  gr_PMT_S20_3350_Filtered = TGraph();
-  gr_PMT_S20_3360_Filtered = TGraph();
-  // Raw toroids
-  gr_TORO_LI20_1988_TMIT_PC_Raw = TGraph();
-  gr_TORO_LI20_2040_TMIT_PC_Raw = TGraph();
-  gr_TORO_LI20_2452_TMIT_PC_Raw = TGraph();
-  gr_TORO_LI20_3163_TMIT_PC_Raw = TGraph();
-  gr_TORO_LI20_3255_TMIT_PC_Raw = TGraph();
-  // Filtered toroids
-  gr_TORO_LI20_1988_TMIT_PC_Filtered = TGraph();
-  gr_TORO_LI20_2040_TMIT_PC_Filtered = TGraph();
-  gr_TORO_LI20_2452_TMIT_PC_Filtered = TGraph();
-  gr_TORO_LI20_3163_TMIT_PC_Filtered = TGraph();
-  gr_TORO_LI20_3255_TMIT_PC_Filtered = TGraph();
+  // Accelerator state PV graphs
+  accRawGrs.assign(accPvNames.size(), TGraph());
+  accFilteredGrs.assign(accPvNames.size(), TGraph());
 }
 
 void Preprocessor::Stats::reset() {
@@ -712,155 +676,22 @@ void Preprocessor::Stats::print() {
   eventCategotyHist.Fill("nEventsFullDetOddPID", nEventsFullDetOddPID);
   saveHist(c, cOptionFirst, {{eventCategotyHist, eventSplitCfg}});
 
-  // PMT_S20_3060
-  GraphPainterConfig gr_PMT_S20_3060_Raw_Cfg;
-  gr_PMT_S20_3060_Raw_Cfg.legTitle = "Raw";
-  gr_PMT_S20_3060_Raw_Cfg.printTitle = true;
-  gr_PMT_S20_3060_Raw.SetNameTitle("gr_PMT_S20_3060", "gr_PMT_S20_3060");
-  GraphPainterConfig gr_PMT_S20_3060_Filtered_Cfg;
-  gr_PMT_S20_3060_Filtered_Cfg.option = "P";
-  gr_PMT_S20_3060_Filtered_Cfg.color = kRed;
-  gr_PMT_S20_3060_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_PMT_S20_3060_Raw, gr_PMT_S20_3060_Raw_Cfg},
-             {gr_PMT_S20_3060_Filtered, gr_PMT_S20_3060_Filtered_Cfg}},
-            legCfg);
-
-  // PMT_S20_3070
-  GraphPainterConfig gr_PMT_S20_3070_Raw_Cfg;
-  gr_PMT_S20_3070_Raw_Cfg.legTitle = "Raw";
-  gr_PMT_S20_3070_Raw_Cfg.printTitle = true;
-  gr_PMT_S20_3070_Raw.SetNameTitle("gr_PMT_S20_3070", "gr_PMT_S20_3070");
-  GraphPainterConfig gr_PMT_S20_3070_Filtered_Cfg;
-  gr_PMT_S20_3070_Filtered_Cfg.option = "P";
-  gr_PMT_S20_3070_Filtered_Cfg.color = kRed;
-  gr_PMT_S20_3070_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_PMT_S20_3070_Raw, gr_PMT_S20_3070_Raw_Cfg},
-             {gr_PMT_S20_3070_Filtered, gr_PMT_S20_3070_Filtered_Cfg}},
-            legCfg);
-
-  // PMT_S20_3179
-  GraphPainterConfig gr_PMT_S20_3179_Raw_Cfg;
-  gr_PMT_S20_3179_Raw_Cfg.legTitle = "Raw";
-  gr_PMT_S20_3179_Raw_Cfg.printTitle = true;
-  gr_PMT_S20_3179_Raw.SetNameTitle("gr_PMT_S20_3179", "gr_PMT_S20_3179");
-  GraphPainterConfig gr_PMT_S20_3179_Filtered_Cfg;
-  gr_PMT_S20_3179_Filtered_Cfg.option = "P";
-  gr_PMT_S20_3179_Filtered_Cfg.color = kRed;
-  gr_PMT_S20_3179_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_PMT_S20_3179_Raw, gr_PMT_S20_3179_Raw_Cfg},
-             {gr_PMT_S20_3179_Filtered, gr_PMT_S20_3179_Filtered_Cfg}},
-            legCfg);
-
-  // PMT_S20_3350
-  GraphPainterConfig gr_PMT_S20_3350_Raw_Cfg;
-  gr_PMT_S20_3350_Raw_Cfg.legTitle = "Raw";
-  gr_PMT_S20_3350_Raw_Cfg.printTitle = true;
-  gr_PMT_S20_3350_Raw.SetNameTitle("gr_PMT_S20_3350", "gr_PMT_S20_3350");
-  GraphPainterConfig gr_PMT_S20_3350_Filtered_Cfg;
-  gr_PMT_S20_3350_Filtered_Cfg.option = "P";
-  gr_PMT_S20_3350_Filtered_Cfg.color = kRed;
-  gr_PMT_S20_3350_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_PMT_S20_3350_Raw, gr_PMT_S20_3350_Raw_Cfg},
-             {gr_PMT_S20_3350_Filtered, gr_PMT_S20_3350_Filtered_Cfg}},
-            legCfg);
-
-  // PMT_S20_3360
-  GraphPainterConfig gr_PMT_S20_3360_Raw_Cfg;
-  gr_PMT_S20_3360_Raw_Cfg.legTitle = "Raw";
-  gr_PMT_S20_3360_Raw_Cfg.printTitle = true;
-  gr_PMT_S20_3360_Raw.SetNameTitle("gr_PMT_S20_3360", "gr_PMT_S20_3360");
-  GraphPainterConfig gr_PMT_S20_3360_Filtered_Cfg;
-  gr_PMT_S20_3360_Filtered_Cfg.option = "P";
-  gr_PMT_S20_3360_Filtered_Cfg.color = kRed;
-  gr_PMT_S20_3360_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_PMT_S20_3360_Raw, gr_PMT_S20_3360_Raw_Cfg},
-             {gr_PMT_S20_3360_Filtered, gr_PMT_S20_3360_Filtered_Cfg}},
-            legCfg);
-
-  // TORO_LI20_1988_TMIT_PC
-  GraphPainterConfig gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg;
-  gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg.legTitle = "Raw";
-  gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg.printTitle = true;
-  gr_TORO_LI20_1988_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_1988_TMIT_PC",
-                                             "gr_TORO_LI20_1988_TMIT_PC");
-  GraphPainterConfig gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg;
-  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.option = "P";
-  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.color = kRed;
-  gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_TORO_LI20_1988_TMIT_PC_Raw, gr_TORO_LI20_1988_TMIT_PC_Raw_Cfg},
-             {gr_TORO_LI20_1988_TMIT_PC_Filtered,
-              gr_TORO_LI20_1988_TMIT_PC_Filtered_Cfg}},
-            legCfg);
-
-  // TORO_LI20_2040_TMIT_PC
-  GraphPainterConfig gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg;
-  gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg.legTitle = "Raw";
-  gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg.printTitle = true;
-  gr_TORO_LI20_2040_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_2040_TMIT_PC",
-                                             "gr_TORO_LI20_2040_TMIT_PC");
-  GraphPainterConfig gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg;
-  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.option = "P";
-  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.color = kRed;
-  gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_TORO_LI20_2040_TMIT_PC_Raw, gr_TORO_LI20_2040_TMIT_PC_Raw_Cfg},
-             {gr_TORO_LI20_2040_TMIT_PC_Filtered,
-              gr_TORO_LI20_2040_TMIT_PC_Filtered_Cfg}},
-            legCfg);
-
-  // TORO_LI20_2452_TMIT_PC
-  GraphPainterConfig gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg;
-  gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg.legTitle = "Raw";
-  gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg.printTitle = true;
-  gr_TORO_LI20_2452_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_2452_TMIT_PC",
-                                             "gr_TORO_LI20_2452_TMIT_PC");
-  GraphPainterConfig gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg;
-  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.option = "P";
-  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.color = kRed;
-  gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_TORO_LI20_2452_TMIT_PC_Raw, gr_TORO_LI20_2452_TMIT_PC_Raw_Cfg},
-             {gr_TORO_LI20_2452_TMIT_PC_Filtered,
-              gr_TORO_LI20_2452_TMIT_PC_Filtered_Cfg}},
-            legCfg);
-
-  // TORO_LI20_3163_TMIT_PC
-  GraphPainterConfig gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg;
-  gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg.legTitle = "Raw";
-  gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg.printTitle = true;
-  gr_TORO_LI20_3163_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_3163_TMIT_PC",
-                                             "gr_TORO_LI20_3163_TMIT_PC");
-  GraphPainterConfig gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg;
-  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.option = "P";
-  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.color = kRed;
-  gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_TORO_LI20_3163_TMIT_PC_Raw, gr_TORO_LI20_3163_TMIT_PC_Raw_Cfg},
-             {gr_TORO_LI20_3163_TMIT_PC_Filtered,
-              gr_TORO_LI20_3163_TMIT_PC_Filtered_Cfg}},
-            legCfg);
-
-  // TORO_LI20_3255_TMIT_PC
-  GraphPainterConfig gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg;
-  gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg.legTitle = "Raw";
-  gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg.printTitle = true;
-  gr_TORO_LI20_3255_TMIT_PC_Raw.SetNameTitle("gr_TORO_LI20_3255_TMIT_PC",
-                                             "gr_TORO_LI20_3255_TMIT_PC");
-  GraphPainterConfig gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg;
-  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.option = "P";
-  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.color = kRed;
-  gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg.legTitle = "Filtered";
-  saveGraph(c, cOption,
-            {{gr_TORO_LI20_3255_TMIT_PC_Raw, gr_TORO_LI20_3255_TMIT_PC_Raw_Cfg},
-             {gr_TORO_LI20_3255_TMIT_PC_Filtered,
-              gr_TORO_LI20_3255_TMIT_PC_Filtered_Cfg}},
-            legCfg);
+  // Accelerator state PVs
+  for (std::size_t j = 0; j < accPvNames.size(); j++) {
+    std::string grName = "gr_" + accPvNames.at(j);
+    GraphPainterConfig grRawCfg;
+    grRawCfg.legTitle = "Raw";
+    grRawCfg.printTitle = true;
+    accRawGrs.at(j).SetNameTitle(grName.c_str(), grName.c_str());
+    GraphPainterConfig grFilteredCfg;
+    grFilteredCfg.option = "P";
+    grFilteredCfg.color = kRed;
+    grFilteredCfg.legTitle = "Filtered";
+    saveGraph(
+        c, cOption,
+        {{accRawGrs.at(j), grRawCfg}, {accFilteredGrs.at(j), grFilteredCfg}},
+        legCfg);
+  }
 
   GraphPainterConfig grOccRawCfg;
   grOccRawCfg.xTitle = "EventId";
